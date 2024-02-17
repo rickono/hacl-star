@@ -76,14 +76,15 @@ let add #deg a b res =
     Stack unit
     (requires (fun h -> inv h (U32.v i)))
     (ensures (fun h0 () h1 -> inv h0 (U32.v i) /\ inv h1 (U32.v i + 1)))
-    = let ai = a.(i) in
+    =
+      let h0 = ST.get () in
+      assert (Seq.equal (Seq.slice (lpoly_v h0 res) 0 (v i)) (Seq.slice spec_sum 0 (v i)));
+      let ai = a.(i) in
       let bi = b.(i) in
       let sum = add_zq ai bi in
       res.(i) <- sum;
-      let h = ST.get () in
-      assert (Seq.equal (Seq.slice (lpoly_v h res) 0 (v i)) (Seq.slice spec_sum 0 (v i)));
-      // assert (v i > 1 ==> Seq.index (lpoly_v h res) 0 == Seq.index (S.add (lpoly_v h a) (lpoly_v h b)) 0);
-      assume (inv h (U32.v i + 1))
+      let h1 = ST.get () in
+      assume (Seq.equal (Seq.slice (lpoly_v h1 res) 0 (v i + 1)) (Seq.slice spec_sum 0 (v i + 1)))
     in
   Lib.Loops.for 0ul deg inv body;
   pop_frame ()
