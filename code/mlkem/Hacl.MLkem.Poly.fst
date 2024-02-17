@@ -13,6 +13,7 @@ module Seq = Lib.Sequence
 module M = LowStar.Modifies
 module U32 = FStar.UInt32
 
+open FStar.Ghost
 open Lib.Buffer
 open Lib.IntTypes
 // open Lib.Loops
@@ -66,10 +67,11 @@ val add:
 let add #deg a b res =
   push_frame ();
   let h0 = ST.get () in
+  let spec_sum: erased _ = S.add (lpoly_v h0 a) (lpoly_v h0 b) in
   let inv h (i:nat) =
     live h a /\ live h b /\ live h res /\ modifies (loc res) h0 h /\
     i <= v deg /\
-    Seq.equal (Seq.slice (lpoly_v h res) 0 i) (Seq.slice (S.add (lpoly_v h a) (lpoly_v h b)) 0 i) in
+    Seq.equal (Seq.slice (lpoly_v h res) 0 i) (Seq.slice spec_sum 0 i) in
   let body (i: U32.t{ 0 <= U32.v i /\ U32.v i < U32.v deg }):
     Stack unit
     (requires (fun h -> inv h (U32.v i)))
@@ -78,8 +80,10 @@ let add #deg a b res =
       let bi = b.(i) in
       let sum = add_zq ai bi in
       res.(i) <- sum;
-      let hx = ST.get () in
-      assume (inv hx (U32.v i + 1))
+      let h = ST.get () in
+      assert (Seq.equal (Seq.slice (lpoly_v h res) 0 (v i)) (Seq.slice spec_sum 0 (v i)));
+      // assert (v i > 1 ==> Seq.index (lpoly_v h res) 0 == Seq.index (S.add (lpoly_v h a) (lpoly_v h b)) 0);
+      assume (inv h (U32.v i + 1))
     in
   Lib.Loops.for 0ul deg inv body;
   pop_frame ()
