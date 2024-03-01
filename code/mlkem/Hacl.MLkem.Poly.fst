@@ -38,6 +38,7 @@ let lpoly_v #deg h p =
 val rq_v: h:HS.mem -> p:rq -> GTot (S.lpoly (v n))
 let rq_v h p = lpoly_v #n h p
 
+
 val add_zq (a:zq) (b:zq): Pure (zq)
   (requires True)
   (ensures fun r -> zq_v r == S.add_zq (zq_v a) (zq_v b))
@@ -51,11 +52,34 @@ let add_zq a b =
   // assert (v sub_value == 0 \/ v sub_value == v q ) ;
   sum -. sub_value
 
+// Making this additional function to add mod n was much easier than making a more generic a+b mod m function
+val add_mod_n (a:uint32{v a < S.n}) (b:uint32{v b < S.n}): Pure uint32
+  (requires True)
+  (ensures fun r -> v r == (v a + v b) % S.n)
+let add_mod_n a b =
+  let sum = a +. b in
+  let sec_n = u32 S.n in
+  let overflow_mask = lte_mask sec_n sum in
+  logand_lemma overflow_mask sec_n ;
+  let sub_value = logand overflow_mask sec_n in
+  sum -. sub_value
+
+val add_mod (a:uint32{v a < S.n}) (b:uint32{v b < S.n}) (m:uint32{v m <= 256}): Pure uint32
+  (requires True)
+  (ensures fun r -> v r == (v a + v b) % S.n)
+let add_mod a b m =
+  let sum = a +. b in
+  let sec_n = u32 S.n in
+  let overflow_mask = lte_mask sec_n sum in
+  logand_lemma overflow_mask sec_n ;
+  let sub_value = logand overflow_mask sec_n in
+  sum -. sub_value
+
 val mul_zq_lemma (a:zq) (b:zq): 
   Lemma (requires True) (ensures (v (a *. b) == (v a * v b)))
 let mul_zq_lemma a b =
   assert (v a < 3329);
-  // assert (v b < 3329);
+  assert (v b < 3329);
   assert (v a * v b < 3329 * 3329);
   ()
 
@@ -86,8 +110,6 @@ let quot_max_error_lemma prod =
   assert (v prod <= v maxProd);
   error_increases_lemma prod maxProd;
   ()
-
-    
 
 #reset-options "--z3rlimit 100 --fuel 0 --ifuel 0 --split_queries always"
 val mul_zq (a:zq) (b:zq): Pure (zq)
@@ -264,29 +286,38 @@ val mul:
     Seq.equal (lpoly_v h1 res) (S.mul (lpoly_v h0 a) (lpoly_v h0 b))
    )
 
-// let mul #deg a b res =
-//   push_frame ();
-//   let h0 = ST.get () in
-//   let spec_prod: erased _ = S.mul (lpoly_v h0 a) (lpoly_v h0 b) in
-//   let inv h (i:nat) =
-//     live h a /\ live h b /\ live h res /\ modifies (loc res) h0 h /\
-//     i <= v deg /\
-//     Seq.equal (Seq.slice (lpoly_v h res) 0 i) (Seq.slice spec_sum 0 i) in
-//   let body (i: U32.t{ 0 <= U32.v i /\ U32.v i < U32.v deg }):
-//     Stack unit
-//     (requires (fun h -> inv h (U32.v i)))
-//     (ensures (fun h0 () h1 -> inv h0 (U32.v i) /\ inv h1 (U32.v i + 1)))
-//     =
-//       let h0 = ST.get () in
-//       assert (Seq.equal (Seq.slice (lpoly_v h0 res) 0 (v i)) (Seq.slice spec_sum 0 (v i)));
-//       let ai = a.(i) in
-//       let bi = b.(i) in
-//       let sum = add_zq ai bi in
-//       res.(i) <- sum;
-//       let h1 = ST.get () in
-//       assert (Seq.equal (Seq.slice (lpoly_v h1 res) 0 (v i)) (Seq.slice spec_sum 0 (v i)));
-//       assert (Seq.index (lpoly_v h1 res) (v i) == Seq.index spec_sum (v i));
-//       slice_plus_one #_ #(v deg) #(v deg) (lpoly_v h1 res) spec_sum (v i)
-//     in
-//   Lib.Loops.for 0ul deg inv body;
-//   pop_frame () 
+let mul #deg a b res =
+  push_frame ();
+  let h0 = ST.get () in
+  let spec_prod: erased _ = S.mul (lpoly_v h0 a) (lpoly_v h0 b) in
+  let inv_i h (i:nat) =
+    live h a /\ live h b /\ live h res /\ modifies (loc res) h0 h /\
+    i <= v deg /\
+    (i < v deg /\ Seq.equal (lpoly_v h res) (S.mul_intermediate (lpoly_v h0 a) (lpoly_v h0 b) i ((v deg) - 1))) \/
+    Seq.equal (lpoly_v h res) (Seq.create (v deg) 0) in
+  let body_i (i: U32.t{ 0 <= U32.v i /\ U32.v i < U32.v deg }):
+    Stack unit
+    (requires (fun h -> inv_i h (U32.v i)))
+    (ensures (fun h0 () h1 -> inv_i h0 (U32.v i) /\ inv_i h1 (U32.v i + 1))) =
+    let h1 = ST.get () in
+    let inv_j h (j:nat) =
+      live h a /\ live h b /\ live h res /\ modifies (loc res) h0 h /\
+      j <= v deg /\
+      (j < v deg /\ Seq.equal (lpoly_v h res) (S.mul_intermediate (lpoly_v h0 a) (lpoly_v h0 b) (v i) j)) \/
+      Seq.equal (lpoly_v h res) (Seq.create (v deg) 0) in
+    let body_j (j: U32.t{ 0 <= U32.v j /\ U32.v j < U32.v deg }):
+      Stack unit
+      (requires (fun h -> inv_j h (U32.v j)))
+      (ensures (fun h0 () h1 -> inv_j h0 (U32.v j) /\ inv_j h1 (U32.v j + 1)))
+      =
+        let ai = a.(i) in
+        let bj = b.(j) in
+        let prod = mul_zq ai bj in
+        let coeff_index = add_mod_n i j in
+        let old = res.(coeff_index) in
+        res.(coeff_index) <- add_zq old prod
+      in
+    Lib.Loops.for 0ul deg inv_j body_j
+    in
+  Lib.Loops.for 0ul deg inv_i body_i;
+  pop_frame ()
