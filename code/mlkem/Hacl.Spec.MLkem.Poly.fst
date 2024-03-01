@@ -85,10 +85,72 @@ let mul_ab_kth_coeff #deg a b k =
   sum_coefficients_to_i a b k (deg - 1)
 
 // Multiplication of polynomials should be done mod X^deg- 1
-val mul:
+// val mul:
+//     #deg:size_nat
+//   -> a:lpoly deg
+//   -> b:lpoly deg
+//   -> lpoly deg
+// let mul #deg a b =
+//   createi deg (fun i -> mul_ab_kth_coeff a b i)
+
+val prev_step:
+    deg:size_nat
+  -> i:int{ 0 <= i && i < deg}
+  -> j:int{ 0 <= j && j < deg}
+  -> tuple2 int int
+let prev_step deg i j =
+  if j = 0 then
+    (i - 1, deg - 1)
+  else
+    (i, j - 1)
+
+val mul_intermediate:
+    #deg:size_nat
+  -> a:lpoly deg
+  -> b:lpoly deg
+  -> i:int{ 0 <= i && i < deg}
+  -> j:int{ 0 <= j && j < deg}
+  -> Tot (lpoly deg) (decreases ((deg * i) + j))
+let rec mul_intermediate #deg a b i j =
+  let c = mul_zq (index a i) (index b j) in
+  if i + j = 0 then 
+    let res = create deg 0 in
+    upd res 0 c
+  else
+    let (prev_i, prev_j) = prev_step deg i j in
+    let res = mul_intermediate a b prev_i prev_j in
+    upd res ((i + j) % deg) (add_zq c (index res ((i + j) % deg)))
+
+val mul: 
     #deg:size_nat
   -> a:lpoly deg
   -> b:lpoly deg
   -> lpoly deg
-let mul #deg a b =
-  createi deg (fun i -> mul_ab_kth_coeff a b i)
+let mul #deg a b = 
+  if deg = 0 then 
+    create 0 0
+  else
+    mul_intermediate a b (deg - 1) (deg - 1)
+
+
+let test1 = 
+  let a: lpoly 1 = 
+  let m = mul_zq 1 2 in
+  let res = create 1 0 in 
+  upd res 0 m in
+  assert (index a 0 = 2);
+  assert (length a = 1);
+  assert (Seq.equal a (Seq.cons 2 Seq.empty))
+
+let test2 = 
+  let a: lpoly 1 = Seq.cons 1 Seq.empty in
+  let b: lpoly 1 = Seq.cons 3 Seq.empty in
+  let p: lpoly 1 = mul a b in
+  let p_i: lpoly 1 = mul_intermediate a b 0 0 in
+  let c: zq = mul_zq (index a 0) (index b 0) in
+  assert (c = 3);
+  let s: zq = Seq.index p_i 0 in
+  assert (c = s);
+  // assert (Seq.index p_i 0 = c);
+  assert (Seq.equal p_i (Seq.cons 3 Seq.empty))
+
