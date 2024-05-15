@@ -214,7 +214,7 @@ let add #deg a b res =
     (ensures (fun h0 () h1 -> inv h0 (U32.v i) /\ inv h1 (U32.v i + 1)))
     =
       let h0 = ST.get () in
-      assert (Seq.equal (Seq.slice (lpoly_v h0 res) 0 (v i)) (Seq.slice spec_sum 0 (v i)));
+      // assert (Seq.equal (Seq.slice (lpoly_v h0 res) 0 (v i)) (Seq.slice spec_sum 0 (v i)));
       let ai = a.(i) in
       let bi = b.(i) in
       let sum = add_zq ai bi in
@@ -280,7 +280,7 @@ let scalar_mul #deg a b res =
     (ensures (fun h0 () h1 -> inv h0 (U32.v i) /\ inv h1 (U32.v i + 1)))
     =
       let h0 = ST.get () in
-      assert (Seq.equal (Seq.slice (lpoly_v h0 res) 0 (v i)) (Seq.slice spec_prod 0 (v i)));
+      // assert (Seq.equal (Seq.slice (lpoly_v h0 res) 0 (v i)) (Seq.slice spec_prod 0 (v i)));
       let ai = a.(i) in
       let prod = mul_zq ai b in
       res.(i) <- prod;
