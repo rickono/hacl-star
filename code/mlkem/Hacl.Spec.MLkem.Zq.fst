@@ -7,6 +7,7 @@ open Lib.IntTypes
 open Lib.Sequence
 open Lib.NatMod
 open FStar.Math.Euclid
+open Hacl.Spec.MLkem.Sums
 
 #reset-options "--z3rlimit 50 --fuel 0 --ifuel 0"
 
@@ -69,3 +70,33 @@ let lemma_mul_zq_comm a b =
 val lemma_mul_zq_id: a:zq -> 
   Lemma (a %* 1 = a)
   [SMTPat (a %* 1)]
+
+let sum_of_zqs = sum_of_modint #q
+
+let rewrite_sum_of_zqs_lemma (start stop:int) (f g:int -> zq): Lemma
+    (requires (forall (i:int).{:pattern (f i)} start <= i /\ i < stop ==> f i == g i))
+    (ensures (sum_of_zqs start stop f) == (sum_of_zqs start stop g))
+    [SMTPat (sum_of_zqs start stop f)]
+= sum_rewrite_lemma #q start stop f g
+
+let lemma_sum_none_zq (start:int) (f:int -> zq) : Lemma
+  (0 == (sum_of_zqs start start f))
+  [SMTPat (sum_of_zqs start start f)]
+  =
+  lemma_sum_none #q start f
+
+let sum_mul_lemma_zq (a:zq) (start stop:int) (f:int -> zq): Lemma
+    (ensures a %* (sum_of_zqs start stop f) == sum_of_zqs start stop (fun i -> a %* (f i)))
+    [SMTPat (sum_of_modint #m start stop (fun i -> a %* (f i)))]
+= sum_mul_lemma #q a start stop f;
+  assert (a %* (sum_of_zqs start stop f) == sum_of_zqs start stop (fun i -> a `mul_mod #q` (f i)));
+  let aux (i:int): Lemma (a `mul_mod #q` (f i) == a %* (f i)) = () in
+  Classical.forall_intro aux;
+  rewrite_sum_of_zqs_lemma start stop (fun i -> a `mul_mod #q` (f i)) (fun i -> a %* (f i));
+  calc (==) {
+    a %* (sum_of_zqs start stop f);
+    (==) {}
+    sum_of_zqs start stop (fun i -> a `mul_mod #q` (f i));
+    (==) {}
+    sum_of_zqs start stop (fun i -> a %* (f i));
+  }

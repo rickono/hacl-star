@@ -229,6 +229,7 @@ let ntt_intt_is_id f =
 
 let mul_componentwise (f g:rq) = createi n (fun i -> f.[i] %* g.[i])
 
+#reset-options "--z3rlimit 15 --fuel 2 --ifuel 0"
 val convolution_theorem_kth_term_ok_1:
     f:rq
   -> g:rq
@@ -258,7 +259,7 @@ let convolution_theorem_kth_term_ok_2 f g k =
   convolution_theorem_kth_term_ok_1 f g k;
   swap_sum_order 0 n 0 n (fun i j -> pow_psi (i * (2 * k + 1)) %* (pow_mod_int_neg_one ((i - j) / n)) %* (f.[j] %* g.[(i - j) % n]))
 
-#reset-options "--z3rlimit 20 --fuel 0 --ifuel 0"
+#reset-options "--z3rlimit 20 --fuel 1 --ifuel 0"
 val convolution_theorem_kth_term_ok_3_:
     f:rq 
   -> g:rq
@@ -508,7 +509,7 @@ let convolution_theorem_kth_term_ok_6_inner_sum_aux f g k j i =
     (pow_psi (((i - j) % n) * (2 * k + 1))) %* (g.[(i - j) % n]);
   }
 
-#reset-options "--z3rlimit 5 --fuel 1 --ifuel 0"
+#reset-options "--z3rlimit 5 --fuel 1 --ifuel 0 --split_queries always"
 val convolution_theorem_kth_term_ok_6_outer_sum_aux_helper:
     f:rq 
   -> g:rq
@@ -523,7 +524,7 @@ let convolution_theorem_kth_term_ok_6_outer_sum_aux_helper f g k j =
   Classical.forall_intro (convolution_theorem_kth_term_ok_6_inner_sum_aux f g k j);
   sum_rewrite_lemma 0 n original goal
 
-
+#reset-options "--z3rlimit 15 --fuel 0 --ifuel 0"
 val convolution_theorem_kth_term_ok_6_outer_sum_aux:
     f:rq 
   -> g:rq
@@ -533,10 +534,7 @@ val convolution_theorem_kth_term_ok_6_outer_sum_aux:
       (f.[j] %* pow_psi (j * (2 * k + 1)) %* (sum_of_zqs 0 n (fun i -> pow_psi (i * (2 * k + 1)) %* pow_psi (-j * (2 * k + 1)) %* (pow_mod_int_neg_one ((i - j) / n)) %* (g.[(i - j) % n])))
     == f.[j] %* pow_psi (j * (2 * k + 1)) %* (sum_of_zqs 0 n (fun i -> pow_psi (((i - j) % n) * (2*k+1)) %* (g.[(i - j) % n]))))
 let convolution_theorem_kth_term_ok_6_outer_sum_aux f g k j =
-  let original = (fun i -> pow_psi (i * (2 * k + 1)) %* pow_psi (-j * (2 * k + 1)) %* (pow_mod_int_neg_one ((i - j) / n)) %* (g.[(i - j) % n])) in
-  let goal = (fun i -> pow_psi (((i - j) % n) * (2*k+1)) %* (g.[(i - j) % n])) in
-  Classical.forall_intro (convolution_theorem_kth_term_ok_6_inner_sum_aux f g k j);
-  sum_rewrite_lemma 0 n original goal
+  convolution_theorem_kth_term_ok_6_outer_sum_aux_helper f g k j
 
 #reset-options "--z3rlimit 15 --fuel 0 --ifuel 0"
 val convolution_theorem_kth_term_ok_6:
