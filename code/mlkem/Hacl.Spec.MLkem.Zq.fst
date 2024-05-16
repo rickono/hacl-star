@@ -11,9 +11,9 @@ open FStar.Math.Euclid
 #reset-options "--z3rlimit 50 --fuel 0 --ifuel 0"
 
 let nonzero_size_nat = x:size_nat{x > 0}
-let n: nonzero_size_nat = 256
+// let n: nonzero_size_nat = 256
 let q: x:nat{is_prime x} = 7681
-let m: int = (pow2 32) / q
+// let m: int = (pow2 32) / q
 let zq = nat_mod q
 
 val int_to_zq: x:int -> zq
