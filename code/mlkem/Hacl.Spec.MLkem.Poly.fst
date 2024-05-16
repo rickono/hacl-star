@@ -12,7 +12,7 @@ open Lib.NatMod
 #reset-options "--z3rlimit 50 --fuel 0 --ifuel 0"
 
 let lpoly deg = lseq zq deg
-let rq = lpoly n
+// let rq = lpoly n
 
 let zero deg = create deg 0
 let one deg = create deg 1
@@ -38,8 +38,8 @@ let test_add =
   assert (index c 0 = 4);
   assert (index c 1 = 7)
 
-val add_rq: a:rq -> b:rq -> rq
-let add_rq a b = add #n a b
+// val add_rq: a:rq -> b:rq -> rq
+// let add_rq a b = add #n a b
 
 // T_q is the image of R_q under the Number Theoretic Transform
 // let tq = lseq (lpoly 2) 128
@@ -56,9 +56,9 @@ let index_tq (t:tq) (i:size_nat{i < 256}) : zq = index t i
 //   upd t (i / 2) p2_upd
 let upd_tq (t:tq) (i:size_nat{i < 256}) (v:zq) : tq = upd t i v
 
-let rq_to_tq (f:rq) = f
-let tq_to_rq (f:tq) = f
-let tq_eq (f g: tq) = Seq.equal f g
+// let rq_to_tq (f:rq) = f
+// let tq_to_rq (f:tq) = f
+// let tq_eq (f g: tq) = Seq.equal f g
 
 val scalar_mul:
     #deg:size_nat
@@ -112,20 +112,20 @@ let scalar_mul #deg p c =
 // let mul_quotient_ring #deg a b =
 //   createi deg (fun i -> mul_ab_kth_coeff a b i)
 
-unfold
-let (.[]) = poly_index #n
+// unfold
+// let (.[]) = poly_index #n
 
-val poly_index_lemma (p:lpoly n) (i:int{0 <= i && i < n}) : 
-  Lemma (p.[i] = index p i)
-  [SMTPat p.[i]]
-let poly_index_lemma p i = ()
+// val poly_index_lemma (p:lpoly n) (i:int{0 <= i && i < n}) : 
+//   Lemma (p.[i] = index p i)
+//   [SMTPat p.[i]]
+// let poly_index_lemma p i = ()
 
-val poly_equal (p q: lpoly n) :
-  Lemma 
-    (requires (forall (i:nat{i < n}). (p.[i] == q.[i])))
-    (ensures equal p q)
-let poly_equal p q = 
-  assert (length p = n);
-  assert (forall (i:nat{i < n}). (p.[i] == index p i));
-  assert (forall (i:nat{i < n}). (q.[i] == index q i));
-  assert (forall (i:nat{i < n}). (index p i == index q i))
+// val poly_equal (p q: lpoly n) :
+//   Lemma 
+//     (requires (forall (i:nat{i < n}). (p.[i] == q.[i])))
+//     (ensures equal p q)
+// let poly_equal p q = 
+//   assert (length p = n);
+//   assert (forall (i:nat{i < n}). (p.[i] == index p i));
+//   assert (forall (i:nat{i < n}). (q.[i] == index q i));
+//   assert (forall (i:nat{i < n}). (index p i == index q i))

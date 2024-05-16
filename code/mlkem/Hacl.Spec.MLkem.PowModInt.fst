@@ -7,9 +7,7 @@ open Lib.IntTypes
 open Lib.NatMod
 module Fermat = FStar.Math.Fermat
 open FStar.Math.Lemmas
-open Hacl.Spec.MLkem.Zq
 module Euclid = FStar.Math.Euclid
-open Hacl.Spec.MLkem.Zq
 
 #reset-options "--z3rlimit 10 --fuel 0 --ifuel 0"
 val pow_mod_int: 
@@ -75,12 +73,12 @@ let lemma_mul_def a b = ()
 
 #reset-options "--z3rlimit 15 --fuel 1 --ifuel 0"
 #push-options "--split_queries always"
-val lemma_pow_mod_inv_def:
+val lemma_pow_mod_inv_def_nat:
     #m:prime 
   -> a:nat_mod m{a % m <> 0}
   -> b:nat
   -> Lemma (pow_mod_int #m a b * pow_mod_int #m a (-b) % m == 1)
-let lemma_pow_mod_inv_def #m a b =
+let lemma_pow_mod_inv_def_nat #m a b =
   calc (==) {
     pow_mod_int #m a b * pow_mod_int #m a (-b) % m;
     (==) {}
@@ -104,6 +102,15 @@ let lemma_pow_mod_inv_def #m a b =
     1 % m;
   }
 #pop-options
+
+val lemma_pow_mod_inv_def:
+    #m:prime 
+  -> a:nat_mod m{a % m <> 0}
+  -> b:int
+  -> Lemma (pow_mod_int #m a b * pow_mod_int #m a (-b) % m == 1)
+let lemma_pow_mod_inv_def #m a b =
+  if b >= 0 then lemma_pow_mod_inv_def_nat #m a b 
+  else lemma_pow_mod_inv_def_nat #m a (-b)
 
 val lemma_pow_mod_inv_twice_:
     #m:prime 
@@ -672,7 +679,6 @@ let lemma_pow_mod_int_add #m a b c =
     }
 
 let pow_mod_int_neg_one (#m:nat{m > 1}) (n:int): nat_mod m =
-  // pow_mod #q (neg_zq 1) (int_to_zq n)
   if n % 2 = 0 then 1 else ((-1) % m)
 
 val lemma_pow_mod_int_neg_one:
