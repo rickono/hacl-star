@@ -711,6 +711,17 @@ let lemma_pow_mod_int_pow1 #m a =
     a % m;
   }
 
+val lemma_pow_mod_int_pow0:
+    #m:prime{m > 2}
+  -> a:nat_mod m
+  -> Lemma (pow_mod_int #m a 0 == 1)
+let lemma_pow_mod_int_pow0 #m a =
+  calc (==) {
+    pow_mod_int #m a 0;
+    (==) {lemma_pow_mod #m a 0}
+    1;
+  }
+
 val lemma_pow_mod_neg_one_eq_pow_mod_base:
     #m:prime{m > 2}
   -> n:int{n = 1 \/ n = 0}

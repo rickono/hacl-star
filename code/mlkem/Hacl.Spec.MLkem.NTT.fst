@@ -119,18 +119,6 @@ let lemma_pow_psi_identity n =
   else
     lemma_pow_psi_identity_ (-n)
 
-// let pow_mod_int_neg_one (n:int): zq =
-//   // pow_mod #q (neg_zq 1) (int_to_zq n)
-//   if n % 2 = 0 then 1 else ((-1) % q)
-
-val lemma_rewrite_pow_psi_conv_theorem:
-    i:int
-  -> j:int 
-  -> k:int
-  -> Lemma (pow_mod_int_neg_one ((i - j) / n) %* pow_psi ((i - j) * (2 * k + 1))
-         == pow_psi ((i - j % n) * (2 * k + 1)))
-let lemma_rewrite_pow_psi_conv_theorem i j k = admit()
-
 val mul_quotient_ring_kth_term:
     f:rq
   -> g:rq
@@ -154,9 +142,6 @@ val mul_quotient_ring_lemma:
   -> Lemma ((mul_quotient_ring f g).[k] == mul_quotient_ring_kth_term f g k)
 let mul_quotient_ring_lemma f g k = ()
 
-// If we have a polynomial a = a_0 + a_1 * X + a_2 * X^2 + a_3 * X^3 + ... + a_n-1 * X^n-1
-// then the NTT should be  a*_k = sum_{j=0}^{n-1} a_j * omega_n^(j*k),
-// where omega_n is the nth root of unity
 val ntt_kth_term:
     f:lpoly n
   -> k:int
@@ -187,7 +172,7 @@ val intt_kth_term:
   -> zq
 let intt_kth_term f k =
   if k < 0 || k >= n then 0
-  else sum_of_zqs 0 (n-1) (fun i -> mul_zq (f.[i]) (pow_psi (-k * (2 * i + 1))))
+  else pow_mod_int #q n (-1) %* sum_of_zqs 0 n (fun i -> mul_zq (f.[i]) (pow_psi (-k * (2 * i + 1))))
 
 let intt (f:lpoly n) = createi n (fun k -> intt_kth_term f k)
 
@@ -201,30 +186,393 @@ val intt_ntt_kth_term:
     f:lpoly n
   -> k:nat{k < n}
   -> zq
-let intt_ntt_kth_term f k = 
-  sum_of_zqs 0 (n-1) (fun i -> mul_zq (ntt_kth_term f i) (pow_psi (-k * (2 * i + 1)))) / n
+let intt_ntt_kth_term f k = (intt (ntt f)).[k]
+
+val intt_ntt_is_id_kth_term_0_aux:
+    f:lpoly n
+  -> k:nat{0 <= k && k < n}
+  -> i:int{0 <= i && i < n}
+  -> Lemma 
+       (mul_zq (ntt_kth_term f i) (pow_psi (-k * (2 * i + 1)))
+       == mul_zq (sum_of_zqs 0 n (fun j -> mul_zq (f.[j]) (pow_psi (j * (2 * i + 1))))) (pow_psi (-k * (2 * i + 1))))
+let intt_ntt_is_id_kth_term_0_aux f k i = ()
+
+val intt_ntt_is_id_kth_term_0:
+    f:lpoly n
+  -> k:nat{k < n}
+  -> Lemma (ensures (intt_ntt_kth_term f k)
+            == pow_mod_int #q n (-1) %* sum_of_zqs 0 n (fun i -> (sum_of_zqs 0 n (fun j -> (f.[j]) %* (pow_psi (j * (2 * i + 1))))) %* (pow_psi (-k * (2 * i + 1)))))
+let intt_ntt_is_id_kth_term_0 f k =
+  Classical.forall_intro (intt_ntt_is_id_kth_term_0_aux f k)
+
+val intt_ntt_is_id_kth_term_1_aux:
+    f:lpoly n
+  -> k:nat{0 <= k && k < n}
+  -> i:int{0 <= i && i < n}
+  -> Lemma 
+      ((sum_of_zqs 0 n (fun j -> (f.[j]) %* (pow_psi (j * (2 * i + 1))))) %* (pow_psi (-k * (2 * i + 1)))
+    == (sum_of_zqs 0 n (fun j -> (f.[j]) %* (pow_psi (j * (2 * i + 1))) %* (pow_psi (-k * (2 * i + 1))))))
+let intt_ntt_is_id_kth_term_1_aux f k i =
+  sum_mul_lemma (pow_psi (-k * (2 * i + 1))) 0 n (fun j -> (f.[j]) %* (pow_psi (j * (2 * i + 1))))
+
+val intt_ntt_is_id_kth_term_1:
+    f:lpoly n
+  -> k:nat{0 <= k && k < n}
+  -> Lemma (ensures (intt_ntt_kth_term f k)
+            == pow_mod_int #q n (-1) %* sum_of_zqs 0 n (fun i -> (sum_of_zqs 0 n (fun j -> (f.[j]) %* (pow_psi (j * (2 * i + 1))) %* (pow_psi (-k * (2 * i + 1)))))))
+let intt_ntt_is_id_kth_term_1 f k = Classical.forall_intro (intt_ntt_is_id_kth_term_1_aux f k)
+
+val intt_ntt_is_id_kth_term_2_inner_aux:
+    f:lpoly n
+  -> k:nat{0 <= k && k < n}
+  -> i:int{0 <= i && i < n}
+  -> j:int{0 <= j && j < n}
+  -> Lemma ((f.[j]) %* (pow_psi (j * (2 * i + 1))) %* (pow_psi (-k * (2 * i + 1)))
+          == (f.[j]) %* (pow_psi ((j - k) * (2 * i + 1))))
+let intt_ntt_is_id_kth_term_2_inner_aux f k i j =
+  calc (==) {
+    (f.[j]) %* (pow_psi (j * (2 * i + 1))) %* (pow_psi (-k * (2 * i + 1)));
+    (==) {}
+    (f.[j]) %* ((pow_psi (j * (2 * i + 1))) %* (pow_psi (-k * (2 * i + 1))));
+    (==) {lemma_pow_mod_int_add #q psi (j * (2 * i + 1)) (-k * (2 * i + 1))}
+    (f.[j]) %* (pow_psi ((j * (2 * i + 1)) + (-k * (2 * i + 1))));
+    (==) {}
+    (f.[j]) %* (pow_psi (((j - k) * (2 * i + 1))));
+  }
+
+val intt_ntt_is_id_kth_term_2_aux:
+    f:lpoly n
+  -> k:nat{0 <= k && k < n}
+  -> i:int{0 <= i && i < n}
+  -> Lemma ((sum_of_zqs 0 n (fun j -> (f.[j]) %* (pow_psi (j * (2 * i + 1))) %* (pow_psi (-k * (2 * i + 1))))) 
+         == (sum_of_zqs 0 n (fun j -> (f.[j]) %* (pow_psi ((j - k) * (2 * i + 1))))))
+let intt_ntt_is_id_kth_term_2_aux f k i = 
+  Classical.forall_intro (intt_ntt_is_id_kth_term_2_inner_aux f k i)
+
+val intt_ntt_is_id_kth_term_2:
+    f:lpoly n
+  -> k:nat{0 <= k && k < n}
+  -> Lemma (ensures (intt_ntt_kth_term f k)
+            == pow_mod_int #q n (-1) %* sum_of_zqs 0 n (fun i -> (sum_of_zqs 0 n (fun j -> (f.[j]) %* (pow_psi ((j - k) * (2 * i + 1)))))))
+let intt_ntt_is_id_kth_term_2 f k = 
+  intt_ntt_is_id_kth_term_1 f k;
+  Classical.forall_intro (intt_ntt_is_id_kth_term_2_aux f k)
+
+val intt_ntt_is_id_kth_term_3_inner_aux:
+    f:lpoly n
+  -> k:nat{k < n}
+  -> i:int{i < n}
+  -> j:int{j < n}
+  -> Lemma ((f.[j]) %* (pow_psi ((j - k) * (2 * i + 1)))
+          == (f.[j]) %* (pow_psi ((j - k) * (2 * i))) %* (pow_psi (j - k)))
+let intt_ntt_is_id_kth_term_3_inner_aux f k i j =
+  calc (==) {
+    (f.[j]) %* (pow_psi ((j - k) * (2 * i + 1)));
+    (==) {lemma_pow_mod_int_add #q psi ((j - k) * (2 * i)) (j - k)}
+    (f.[j]) %* (pow_psi ((j - k) * (2 * i)) %* pow_psi (j - k));
+  }
+
+val intt_ntt_is_id_kth_term_3_inner:
+    f:lpoly n
+  -> k:nat{k < n}
+  -> i:int{i < n}
+  -> Lemma ((sum_of_zqs 0 n (fun j -> (f.[j]) %* (pow_psi ((j - k) * (2 * i + 1)))))
+        == (sum_of_zqs 0 n (fun j -> (f.[j]) %* (pow_psi ((j - k) * (2 * i))) %* (pow_psi (j - k)))))
+let intt_ntt_is_id_kth_term_3_inner f k i = Classical.forall_intro (intt_ntt_is_id_kth_term_3_inner_aux f k i)
+
+val intt_ntt_is_id_kth_term_3:
+    f:lpoly n
+  -> k:nat{k < n}
+  -> Lemma (ensures (intt_ntt_kth_term f k)
+            == pow_mod_int #q n (-1) %* sum_of_zqs 0 n (fun i -> (sum_of_zqs 0 n (fun j -> (f.[j]) %* (pow_psi ((j - k) * (2 * i))) %* (pow_psi (j - k))))))
+let intt_ntt_is_id_kth_term_3 f k =
+  intt_ntt_is_id_kth_term_2 f k;
+  Classical.forall_intro (intt_ntt_is_id_kth_term_3_inner f k)
+
+val intt_ntt_is_id_kth_term_4:
+    f:lpoly n
+  -> k:nat{k < n}
+  -> Lemma (ensures (intt_ntt_kth_term f k)
+            == pow_mod_int #q n (-1) %* sum_of_zqs 0 n (fun j -> (sum_of_zqs 0 n (fun i -> (f.[j]) %* (pow_psi ((j - k) * (2 * i))) %* (pow_psi (j - k))))))
+let intt_ntt_is_id_kth_term_4 f k = 
+  intt_ntt_is_id_kth_term_3 f k;
+  swap_sum_order 0 n 0 n (fun i j -> (f.[j]) %* (pow_psi ((j - k) * (2 * i))) %* (pow_psi (j - k)))
+
+val intt_ntt_is_id_kth_term_5_aux_rewrite_aux:
+    f:lpoly n
+  -> k:nat{k < n}
+  -> j:int{j < n}
+  -> i:int{i < n}
+  -> Lemma ((f.[j]) %* (pow_psi ((j - k) * (2 * i))) %* (pow_psi (j - k))
+         == (f.[j] %* (pow_psi (j - k))) %* (pow_psi ((j - k) * (2 * i))))
+let intt_ntt_is_id_kth_term_5_aux_rewrite_aux f k j i =
+  calc (==) {
+    (f.[j]) %* (pow_psi ((j - k) * (2 * i))) %* (pow_psi (j - k));
+    (==) {}
+    (f.[j]) %* ((pow_psi ((j - k) * (2 * i))) %* (pow_psi (j - k)));
+    (==) {}
+    (f.[j]) %* ((pow_psi (j - k)) %* (pow_psi ((j - k) * (2 * i))));
+    (==) {}
+    (f.[j]) %* (pow_psi (j - k)) %* (pow_psi ((j - k) * (2 * i)));
+  }
+
+val intt_ntt_is_id_kth_term_5_aux_rewrite:
+    f:lpoly n
+  -> k:nat{k < n}
+  -> j:int{j < n}
+  -> Lemma ((sum_of_zqs 0 n (fun i -> (f.[j]) %* (pow_psi ((j - k) * (2 * i))) %* (pow_psi (j - k))))
+         == (sum_of_zqs 0 n (fun i -> (f.[j] %* (pow_psi (j - k))) %* (pow_psi ((j - k) * (2 * i))))))
+let intt_ntt_is_id_kth_term_5_aux_rewrite f k j = Classical.forall_intro (intt_ntt_is_id_kth_term_5_aux_rewrite_aux f k j)
+
+val intt_ntt_is_id_kth_term_5_aux:
+    f:lpoly n
+  -> k:nat{k < n}
+  -> j:int{j < n}
+  -> Lemma ((sum_of_zqs 0 n (fun i -> (f.[j]) %* (pow_psi ((j - k) * (2 * i))) %* (pow_psi (j - k))))
+        == f.[j] %* (pow_psi (j - k)) %* (sum_of_zqs 0 n (fun i -> (pow_psi ((j - k) * (2 * i))))))
+let intt_ntt_is_id_kth_term_5_aux f k j =
+  intt_ntt_is_id_kth_term_5_aux_rewrite f k j;
+  sum_mul_lemma (f.[j] %* (pow_psi (j - k))) 0 n (fun i -> (pow_psi ((j - k) * (2 * i))))
+
+val intt_ntt_is_id_kth_term_5:
+    f:lpoly n
+  -> k:nat{k < n}
+  -> Lemma (ensures (intt_ntt_kth_term f k)
+            == pow_mod_int #q n (-1) %* sum_of_zqs 0 n (fun j -> f.[j] %* (pow_psi (j - k)) %* (sum_of_zqs 0 n (fun i -> (pow_psi ((j - k) * (2 * i)))))))
+let intt_ntt_is_id_kth_term_5 f k =
+  intt_ntt_is_id_kth_term_4 f k;
+  Classical.forall_intro (intt_ntt_is_id_kth_term_5_aux f k)
+
+
+val intt_ntt_is_id_kth_term_6_inner_aux:
+    f:lpoly n
+  -> k:nat{k < n}
+  -> j:int{j < n}
+  -> i:int{i < n}
+  -> Lemma ((pow_psi ((j - k) * (2 * i)))
+          == (pow_mod_int #q (pow_psi (2 * (j - k))) i))
+let intt_ntt_is_id_kth_term_6_inner_aux f k j i =
+  calc (==) {
+    (pow_psi ((j - k) * (2 * i)));
+    (==) {lemma_pow_mod_int_mul #q psi (2 * (j - k)) i}
+    (pow_mod_int #q (pow_psi (2 * (j - k))) i);
+  }
+
+val intt_ntt_is_id_kth_term_6_inner:
+    f:lpoly n
+  -> k:nat{k < n}
+  -> j:int{j < n}
+  -> Lemma ((sum_of_zqs 0 n (fun i -> (pow_psi ((j - k) * (2 * i))))
+        == (sum_of_zqs 0 n (fun i -> (pow_mod_int #q (pow_psi (2 * (j - k))) i)))))
+let intt_ntt_is_id_kth_term_6_inner f k j = Classical.forall_intro (intt_ntt_is_id_kth_term_6_inner_aux f k j)
+
+val intt_ntt_is_id_kth_term_6_aux:
+    f:lpoly n
+  -> k:nat{k < n}
+  -> j:int{j < n}
+  -> Lemma ((f.[j] %* (pow_psi (j - k)) %* (sum_of_zqs 0 n (fun i -> (pow_psi ((j - k) * (2 * i))))))
+         == (f.[j] %* (pow_psi (j - k)) %* (sum_of_zqs 0 n (fun i -> (pow_mod_int #q (pow_psi (2 * (j - k))) i)))))
+let intt_ntt_is_id_kth_term_6_aux f k j =
+  intt_ntt_is_id_kth_term_6_inner f k j
+
+val intt_ntt_is_id_kth_term_6:
+    f:lpoly n
+  -> k:nat{k < n}
+  -> Lemma (ensures (intt_ntt_kth_term f k)
+            == pow_mod_int #q n (-1) %* sum_of_zqs 0 n (fun j -> f.[j] %* (pow_psi (j - k)) %* (sum_of_zqs 0 n (fun i -> (pow_mod_int #q (pow_psi (2 * (j - k))) i)))))
+let intt_ntt_is_id_kth_term_6 f k =
+  intt_ntt_is_id_kth_term_5 f k;
+  Classical.forall_intro (intt_ntt_is_id_kth_term_6_aux f k)
+
+val intt_ntt_is_id_kth_term_7_split_sum:
+    f:lpoly n
+  -> k:nat{k < n}
+  -> Lemma (sum_of_zqs 0 n (fun j -> f.[j] %* (pow_psi (j - k)) %* (sum_of_zqs 0 n (fun i -> (pow_mod_int #q (pow_psi (2 * (j - k))) i))))
+         == sum_of_zqs 0 (k+1) (fun j -> f.[j] %* (pow_psi (j - k)) %* (sum_of_zqs 0 n (fun i -> (pow_mod_int #q (pow_psi (2 * (j - k))) i))))
+            +% sum_of_zqs (k+1) n (fun j -> f.[j] %* (pow_psi (j - k)) %* (sum_of_zqs 0 n (fun i -> (pow_mod_int #q (pow_psi (2 * (j - k))) i)))))
+let intt_ntt_is_id_kth_term_7_split_sum f k =
+  lemma_sum_join 0 (k+1) n (fun j -> f.[j] %* (pow_psi (j - k)) %* (sum_of_zqs 0 n (fun i -> (pow_mod_int #q (pow_psi (2 * (j - k))) i))))
+
+#reset-options "--z3rlimit 15 --fuel 1 --ifuel 0 --split_queries always"
+val intt_ntt_is_id_kth_term_7_unfold_sum:
+    f:lpoly n
+  -> k:nat{k < n}
+  -> Lemma (sum_of_zqs 0 n (fun j -> f.[j] %* (pow_psi (j - k)) %* (sum_of_zqs 0 n (fun i -> (pow_mod_int #q (pow_psi (2 * (j - k))) i))))
+         == sum_of_zqs 0 k (fun j -> f.[j] %* (pow_psi (j - k)) %* (sum_of_zqs 0 n (fun i -> (pow_mod_int #q (pow_psi (2 * (j - k))) i))))
+            +% f.[k] %* (pow_psi (k - k)) %* (sum_of_zqs 0 n (fun i -> (pow_mod_int #q (pow_psi (2 * (k - k))) i)))
+            +% sum_of_zqs (k+1) n (fun j -> f.[j] %* (pow_psi (j - k)) %* (sum_of_zqs 0 n (fun i -> (pow_mod_int #q (pow_psi (2 * (j - k))) i)))))
+let intt_ntt_is_id_kth_term_7_unfold_sum f k =
+  intt_ntt_is_id_kth_term_7_split_sum f k;
+  unfold_sum 0 (k+1) (fun j -> f.[j] %* (pow_psi (j - k)) %* (sum_of_zqs 0 n (fun i -> (pow_mod_int #q (pow_psi (2 * (j - k))) i))))
+
+#reset-options "--z3rlimit 10 --fuel 0 --ifuel 0"
+val intt_ntt_is_id_kth_term_7:
+    f:lpoly n
+  -> k:nat{k < n}
+  -> Lemma (ensures (intt_ntt_kth_term f k)
+            == pow_mod_int #q n (-1) %* (
+                sum_of_zqs 0 k (fun j -> f.[j] %* (pow_psi (j - k)) %* (sum_of_zqs 0 n (fun i -> (pow_mod_int #q (pow_psi (2 * (j - k))) i))))
+                +% f.[k] %* (pow_psi (k - k)) %* (sum_of_zqs 0 n (fun i -> (pow_mod_int #q (pow_psi (2 * (k - k))) i)))
+                +% sum_of_zqs (k+1) n (fun j -> f.[j] %* (pow_psi (j - k)) %* (sum_of_zqs 0 n (fun i -> (pow_mod_int #q (pow_psi (2 * (j - k))) i))))))
+let intt_ntt_is_id_kth_term_7 f k =
+  intt_ntt_is_id_kth_term_6 f k;
+  intt_ntt_is_id_kth_term_7_unfold_sum f k
+
+(* By contradiction: if = psi^-x = 1 that means that psi^x = 1*)
+val lemma_pow_psi_not_one_neg:
+    x:nat{x < 2 * n && x <> 0}
+  -> Lemma (pow_psi (-x) <> 1)
+let lemma_pow_psi_not_one_neg x =
+  if pow_psi (-x) = 1 then begin
+    calc (==) {
+      1;
+      (==) {lemma_pow_mod_inv_def #q psi x}
+      pow_psi x %* pow_psi (-x);
+      (==) {}
+      pow_psi x;
+    };
+    assert (False)
+  end
+
+val lemma_pow_psi_not_one:
+    x:int{x < 2 * n && x <> 0 && x > -2 * n}
+  -> Lemma (pow_psi x <> 1)
+let lemma_pow_psi_not_one x = 
+  if x < 0 then lemma_pow_psi_not_one_neg (-x)
+
+val intt_ntt_is_id_kth_term_8_outside_terms:
+    f:lpoly n
+  -> k:nat{k < n}
+  -> j:nat{j < n && j <> k}
+  -> Lemma ((sum_of_zqs 0 n (fun i -> (pow_mod_int #q (pow_psi (2 * (j - k))) i)))
+          == ((pow_mod_int #q (pow_psi (2 * (j - k))) n) -% 1) %* (pow_mod_int #q ((pow_psi (2 * (j - k)) - 1) % q) (-1)))
+let intt_ntt_is_id_kth_term_8_outside_terms f k j = 
+  lemma_pow_psi_not_one (2 * (j - k));
+  lemma_geometric_sum n (pow_psi (2 * (j - k)))
+
+val intt_ntt_is_id_kth_term_8_outside_terms_aux:
+    f:lpoly n 
+  -> k:nat{k < n}
+  -> j:nat{j < n && j <> k}
+  -> Lemma (f.[j] %* (pow_psi (j - k)) %* (sum_of_zqs 0 n (fun i -> (pow_mod_int #q (pow_psi (2 * (j - k))) i)))
+         == f.[j] %* (pow_psi (j - k)) %* (((pow_mod_int #q (pow_psi (2 * (j - k))) n) -% 1) %* (pow_mod_int #q ((pow_psi (2 * (j - k)) - 1) % q) (-1))))
+let intt_ntt_is_id_kth_term_8_outside_terms_aux f k j =
+  intt_ntt_is_id_kth_term_8_outside_terms f k j
+
+val intt_ntt_is_id_kth_term_8_inside_term_aux:
+    f:lpoly n
+  -> k:nat{k < n}
+  -> i:int
+  -> Lemma (pow_mod_int #q (pow_psi (2 * (k - k))) i
+         == pow_mod_int #q 1 i)
+let intt_ntt_is_id_kth_term_8_inside_term_aux f k i =
+  calc (==) {
+    pow_mod_int #q (pow_psi (2 * (k - k))) i;
+    (==) {}
+    pow_mod_int #q (pow_psi (0)) i;
+    (==) {lemma_pow_mod_int_pow0 #q psi}
+    pow_mod_int #q 1 i;
+  }
+
+val intt_ntt_is_id_kth_term_8_inside_term_rewrite:
+    f:lpoly n
+  -> k:nat{k < n}
+  -> Lemma ((sum_of_zqs 0 n (fun i -> (pow_mod_int #q (pow_psi (2 * (k - k))) i)))
+        == n)
+let intt_ntt_is_id_kth_term_8_inside_term_rewrite f k =
+  Classical.forall_intro (intt_ntt_is_id_kth_term_8_inside_term_aux f k);
+  lemma_geometric_sum_ones n 1
+
+val intt_ntt_is_id_kth_term_8_inside_term:
+    f:lpoly n
+  -> k:nat{k < n}
+  -> Lemma (f.[k] %* (pow_psi (k - k)) %* (sum_of_zqs 0 n (fun i -> (pow_mod_int #q (pow_psi (2 * (k - k))) i)))
+         == f.[k] %* n)
+let intt_ntt_is_id_kth_term_8_inside_term f k =
+  lemma_pow_mod_int_pow0 #q psi;
+  intt_ntt_is_id_kth_term_8_inside_term_rewrite f k
+
+val intt_ntt_is_id_kth_term_8:
+    f:lpoly n
+  -> k:nat{k < n}
+  -> Lemma (ensures (intt_ntt_kth_term f k)
+            == pow_mod_int #q n (-1) %* (
+                sum_of_zqs 0 k (fun j -> f.[j] %* (pow_psi (j - k)) %* (((pow_mod_int #q (pow_psi (2 * (j - k))) n) -% 1) %* (pow_mod_int #q ((pow_psi (2 * (j - k)) - 1) % q) (-1))))
+                +% f.[k] %* n
+                +% sum_of_zqs (k+1) n (fun j -> f.[j] %* (pow_psi (j - k)) %* (((pow_mod_int #q (pow_psi (2 * (j - k))) n) -% 1) %* (pow_mod_int #q ((pow_psi (2 * (j - k)) - 1) % q) (-1))))))
+let intt_ntt_is_id_kth_term_8 f k =
+  intt_ntt_is_id_kth_term_7 f k;
+  Classical.forall_intro (intt_ntt_is_id_kth_term_8_outside_terms_aux f k);
+  intt_ntt_is_id_kth_term_8_inside_term f k
+
+
+val intt_ntt_id_kth_term_9_sum_cancels:
+    f:lpoly n
+  -> k:nat{k < n}
+  -> j:nat{j < n && j <> k}
+  -> Lemma ((pow_mod_int #q (pow_psi (2 * (j - k))) n) -% 1 == 0)
+let intt_ntt_id_kth_term_9_sum_cancels f k j =
+  calc (==) {
+    (pow_mod_int #q (pow_psi (2 * (j - k))) n) -% 1;
+    (==) {lemma_pow_mod_int_mul #q psi (2 * (j - k)) n}
+    ((pow_psi (2 * n * (j - k)))) -% 1;
+    (==) {lemma_pow_mod_int_mul #q psi (2 * n) (j - k)}
+    (pow_mod_int #q (pow_psi (2 * n)) (j - k) -% 1);
+    (==) {}
+    (pow_mod_int #q 1 (j - k) -% 1);
+    (==) {lemma_pow_mod_int_one #q (j - k)}
+    (1 -% 1);
+  }
+
+val intt_ntt_id_kth_term_9_aux:
+    f:lpoly n
+  -> k:nat{k < n}
+  -> j:nat{j < n && j <> k}
+  -> Lemma (f.[j] %* (pow_psi (j - k)) %* (((pow_mod_int #q (pow_psi (2 * (j - k))) n) -% 1) %* (pow_mod_int #q ((pow_psi (2 * (j - k)) - 1) % q) (-1)))
+         == 0)
+let intt_ntt_id_kth_term_9_aux f k j =
+  intt_ntt_id_kth_term_9_sum_cancels f k j
+
+val intt_ntt_is_id_kth_term_9:
+    f:lpoly n
+  -> k:nat{k < n}
+  -> Lemma (ensures (intt_ntt_kth_term f k)
+            == pow_mod_int #q n (-1) %* f.[k] %* n)
+let intt_ntt_is_id_kth_term_9 f k =
+  intt_ntt_is_id_kth_term_8 f k;
+  Classical.forall_intro (intt_ntt_id_kth_term_9_aux f k);
+  lemma_sum_zeros 0 k;
+  lemma_sum_zeros (k+1) n
 
 val intt_ntt_is_id_kth_term: 
     (f:lpoly n) 
   -> (k:nat{k < n}) 
   -> Lemma (ensures (f.[k]) == ((intt (ntt f)).[k]))
 let intt_ntt_is_id_kth_term f k =
-  let rhs = intt_ntt_kth_term f k in
-  assert (rhs == sum_of_zqs 0 (n-1) (fun i -> mul_zq (ntt_kth_term f i) (pow_psi (-k * (2 * i + 1)))) / n);
-  admit()
+  intt_ntt_is_id_kth_term_9 f k;
+  calc (==) {
+    pow_mod_int #q n (-1) %* f.[k] %* n;
+    (==) {}
+    f.[k] %* pow_mod_int #q n (-1) %* n;
+    (==) {}
+    f.[k] %* (pow_mod_int #q n (-1) %* n);
+    (==) {lemma_pow_mod_int_pow1 #q n}
+    f.[k] %* (pow_mod_int #q n (-1) %* pow_mod_int #q n 1);
+    (==) {lemma_pow_mod_inv_def #q n 1}
+    f.[k] %* 1;
+  }
 
 val intt_ntt_is_id:
     f:rq
-  -> Lemma (requires True) (ensures Seq.equal f (intt (ntt f)))
+  -> Lemma (requires True) (ensures equal f (intt (ntt f)))
 let intt_ntt_is_id f =
-  admit()
+  Classical.forall_intro (intt_ntt_is_id_kth_term f)
 
-
-val ntt_intt_is_id:
-    f:rq
-  -> Lemma (requires True) (ensures Seq.equal f (ntt (intt f)))
-let ntt_intt_is_id f =
-  admit()
+// val ntt_intt_is_id:
+//     f:rq
+//   -> Lemma (requires True) (ensures Seq.equal f (ntt (intt f)))
+// let ntt_intt_is_id f =
+//   admit()
 
 
 let mul_componentwise (f g:rq) = createi n (fun i -> f.[i] %* g.[i])
@@ -508,7 +856,7 @@ let convolution_theorem_kth_term_ok_6_inner_sum_aux f g k j i =
     (pow_psi (((i - j) % n) * (2 * k + 1))) %* (g.[(i - j) % n]);
   }
 
-#reset-options "--z3rlimit 5 --fuel 1 --ifuel 0"
+#reset-options "--z3rlimit 15 --fuel 1 --ifuel 0"
 val convolution_theorem_kth_term_ok_6_outer_sum_aux_helper:
     f:rq 
   -> g:rq
@@ -520,8 +868,7 @@ val convolution_theorem_kth_term_ok_6_outer_sum_aux_helper:
 let convolution_theorem_kth_term_ok_6_outer_sum_aux_helper f g k j =
   let original = (fun i -> pow_psi (i * (2 * k + 1)) %* pow_psi (-j * (2 * k + 1)) %* (pow_mod_int_neg_one ((i - j) / n)) %* (g.[(i - j) % n])) in
   let goal = (fun i -> pow_psi (((i - j) % n) * (2 * k + 1)) %* (g.[(i - j) % n])) in
-  Classical.forall_intro (convolution_theorem_kth_term_ok_6_inner_sum_aux f g k j);
-  sum_rewrite_lemma 0 n original goal
+  Classical.forall_intro (convolution_theorem_kth_term_ok_6_inner_sum_aux f g k j)
 
 
 val convolution_theorem_kth_term_ok_6_outer_sum_aux:
@@ -533,10 +880,7 @@ val convolution_theorem_kth_term_ok_6_outer_sum_aux:
       (f.[j] %* pow_psi (j * (2 * k + 1)) %* (sum_of_zqs 0 n (fun i -> pow_psi (i * (2 * k + 1)) %* pow_psi (-j * (2 * k + 1)) %* (pow_mod_int_neg_one ((i - j) / n)) %* (g.[(i - j) % n])))
     == f.[j] %* pow_psi (j * (2 * k + 1)) %* (sum_of_zqs 0 n (fun i -> pow_psi (((i - j) % n) * (2*k+1)) %* (g.[(i - j) % n]))))
 let convolution_theorem_kth_term_ok_6_outer_sum_aux f g k j =
-  let original = (fun i -> pow_psi (i * (2 * k + 1)) %* pow_psi (-j * (2 * k + 1)) %* (pow_mod_int_neg_one ((i - j) / n)) %* (g.[(i - j) % n])) in
-  let goal = (fun i -> pow_psi (((i - j) % n) * (2*k+1)) %* (g.[(i - j) % n])) in
-  Classical.forall_intro (convolution_theorem_kth_term_ok_6_inner_sum_aux f g k j);
-  sum_rewrite_lemma 0 n original goal
+  convolution_theorem_kth_term_ok_6_outer_sum_aux_helper f g k j
 
 #reset-options "--z3rlimit 15 --fuel 0 --ifuel 0"
 val convolution_theorem_kth_term_ok_6:
@@ -551,6 +895,31 @@ let convolution_theorem_kth_term_ok_6 f g k =
   convolution_theorem_kth_term_ok_5 f g k;
   Classical.forall_intro (convolution_theorem_kth_term_ok_6_outer_sum_aux f g k)
 
+val convolution_theorem_kth_term_ok_7_inner_sum_aux:
+    f:rq
+  -> g:rq
+  -> k:nat{k < n}
+  -> j:int
+  -> Lemma
+      (sum_of_zqs 0 n (fun i -> pow_psi (((i - j) % n) * (2*k+1)) %* (g.[(i - j) % n]))
+    == sum_of_zqs 0 n (fun i' -> pow_psi (i' * (2*k+1)) %* (g.[i'])))
+let convolution_theorem_kth_term_ok_7_inner_sum_aux f g k j =
+  let original = (fun i -> pow_psi (((i - j) % n) * (2*k+1)) %* (g.[(i - j) % n])) in
+  let goal = (fun i' -> pow_psi (i' * (2*k+1)) %* (g.[i'])) in 
+  lemma_sum_shift_mod n j goal
+
+
+val convolution_theorem_kth_term_ok_7_outer_sum_aux:
+    f:rq
+  -> g:rq
+  -> k:nat{k < n}
+  -> j:int
+  -> Lemma
+      (f.[j] %* pow_psi (j * (2 * k + 1)) %* (sum_of_zqs 0 n (fun i -> pow_psi (((i - j) % n) * (2*k+1)) %* (g.[(i - j) % n])))
+    == f.[j] %* pow_psi (j * (2 * k + 1)) %* (sum_of_zqs 0 n (fun i -> pow_psi (i * (2*k+1)) %* (g.[i]))))
+let convolution_theorem_kth_term_ok_7_outer_sum_aux f g k j =
+  convolution_theorem_kth_term_ok_7_inner_sum_aux f g k j
+
 val convolution_theorem_kth_term_ok_7:
     f:rq 
   -> g:rq
@@ -560,7 +929,52 @@ val convolution_theorem_kth_term_ok_7:
       (ensures ntt_kth_term (mul_quotient_ring f g) k
             == sum_of_zqs 0 n (fun j -> f.[j] %* pow_psi (j * (2 * k + 1)) %* (sum_of_zqs 0 n (fun i -> pow_psi (i * (2*k+1)) %* (g.[i])))))
 let convolution_theorem_kth_term_ok_7 f g k =
-  admit()
+  convolution_theorem_kth_term_ok_6 f g k;
+  Classical.forall_intro (convolution_theorem_kth_term_ok_7_outer_sum_aux f g k)
+
+val convolution_theorem_kth_term_ok_8_rewrite7_aux:
+    f:rq 
+  -> g:rq
+  -> k:nat{k < n}
+  -> j:int
+  -> Lemma
+      (f.[j] %* pow_psi (j * (2 * k + 1)) %* (sum_of_zqs 0 n (fun i -> pow_psi (i * (2*k+1)) %* (g.[i])))
+    == (sum_of_zqs 0 n (fun i -> pow_psi (i * (2*k+1)) %* (g.[i]))) %* (f.[j] %* pow_psi (j * (2 * k + 1))))
+let convolution_theorem_kth_term_ok_8_rewrite7_aux f g k j = 
+  calc (==) {
+    f.[j] %* pow_psi (j * (2 * k + 1)) %* (sum_of_zqs 0 n (fun i -> pow_psi (i * (2*k+1)) %* (g.[i])));
+    (==) {lemma_mul_mod_comm (f.[j] %* pow_psi (j * (2 * k + 1))) (sum_of_zqs 0 n (fun i -> pow_psi (i * (2*k+1)) %* (g.[i])))}
+    (sum_of_zqs 0 n (fun i -> pow_psi (i * (2*k+1)) %* (g.[i]))) %* (f.[j] %* pow_psi (j * (2 * k + 1)));
+  }
+
+val convolution_theorem_kth_term_ok_8_rewrite7:
+    f:rq
+  -> g:rq
+  -> k:nat{k < n}
+  -> Lemma
+       (sum_of_zqs 0 n (fun j -> f.[j] %* pow_psi (j * (2 * k + 1)) %* (sum_of_zqs 0 n (fun i -> pow_psi (i * (2*k+1)) %* (g.[i]))))
+     == sum_of_zqs 0 n (fun j -> (sum_of_zqs 0 n (fun i -> pow_psi (i * (2*k+1)) %* (g.[i]))) %* (f.[j] %* pow_psi (j * (2 * k + 1)))))
+let convolution_theorem_kth_term_ok_8_rewrite7 f g k =
+  Classical.forall_intro (convolution_theorem_kth_term_ok_8_rewrite7_aux f g k)
+
+val convolution_theorem_kth_term_ok_8_apply_mul:
+    f:rq
+  -> g:rq  
+  -> k:nat{k < n}
+  -> Lemma
+      (sum_of_zqs 0 n (fun j -> (sum_of_zqs 0 n (fun i -> pow_psi (i * (2*k+1)) %* (g.[i]))) %* (f.[j] %* pow_psi (j * (2 * k + 1))))
+   == (sum_of_zqs 0 n (fun i -> pow_psi (i * (2*k+1)) %* (g.[i]))) %* (sum_of_zqs 0 n (fun j -> f.[j] %* pow_psi (j * (2 * k + 1)))))
+let convolution_theorem_kth_term_ok_8_apply_mul f g k =
+  sum_mul_lemma (sum_of_zqs 0 n (fun i -> pow_psi (i * (2*k+1)) %* (g.[i]))) 0 n (fun j -> f.[j] %* pow_psi (j * (2 * k + 1)))
+
+val convolution_theorem_kth_term_ok_8_comm:
+    f:rq
+  -> g:rq  
+  -> k:nat{k < n}
+  -> Lemma
+      ((sum_of_zqs 0 n (fun i -> pow_psi (i * (2*k+1)) %* (g.[i]))) %* (sum_of_zqs 0 n (fun j -> f.[j] %* pow_psi (j * (2 * k + 1))))
+    == (sum_of_zqs 0 n (fun j -> f.[j] %* pow_psi (j * (2 * k + 1)))) %* (sum_of_zqs 0 n (fun i -> pow_psi (i * (2*k+1)) %* (g.[i]))))
+let convolution_theorem_kth_term_ok_8_comm f g k = ()
 
 val convolution_theorem_kth_term_ok_8:
     f:rq 
@@ -571,7 +985,10 @@ val convolution_theorem_kth_term_ok_8:
       (ensures ntt_kth_term (mul_quotient_ring f g) k
             == (sum_of_zqs 0 n (fun j -> f.[j] %* pow_psi (j * (2 * k + 1)))) %* (sum_of_zqs 0 n (fun i -> pow_psi (i * (2*k+1)) %* (g.[i]))))
 let convolution_theorem_kth_term_ok_8 f g k =
-  admit()
+  convolution_theorem_kth_term_ok_7 f g k;
+  convolution_theorem_kth_term_ok_8_rewrite7 f g k;
+  convolution_theorem_kth_term_ok_8_apply_mul f g k;
+  convolution_theorem_kth_term_ok_8_comm f g k
 
 val convolution_theorem_kth_term_ok_9:
     f:rq 
@@ -582,7 +999,7 @@ val convolution_theorem_kth_term_ok_9:
       (ensures ntt_kth_term (mul_quotient_ring f g) k
             == ntt_kth_term f k %* ntt_kth_term g k)
 let convolution_theorem_kth_term_ok_9 f g k =
-  admit()
+  convolution_theorem_kth_term_ok_8 f g k
 
 #reset-options "--z3rlimit 10 --fuel 0 --ifuel 0"
 val convolution_theorem_kth_term_ok:
@@ -597,6 +1014,7 @@ let convolution_theorem_kth_term_ok f g k =
     convolution_theorem_kth_term_ok_9 f g k
   else ()
 
+#reset-options "--z3rlimit 15 --fuel 1 --ifuel 0 --split_queries always"
 val convolution_theorem:
     f:rq
   -> g:rq
@@ -609,11 +1027,9 @@ let convolution_theorem f g =
   Classical.forall_intro (convolution_theorem_kth_term_ok f g);
   let lhs = ntt (mul_quotient_ring f g) in
   let rhs = mul_componentwise (ntt f) (ntt g) in
-  // assert (forall (i:nat{i < n}).{:pattern (lhs.[i])} (lhs.[i] == ntt_kth_term (mul_quotient_ring f g) i));
-  // assert (forall (i:nat{i < n}).{:pattern (rhs.[i])} (rhs.[i] == (ntt f).[i] %* (ntt g).[i]));
   assert (forall (i:nat{i < n}).{:pattern (lhs.[i]); (rhs.[i])} (lhs.[i] == rhs.[i]))
 
-
+#reset-options "--z3rlimit 10 --fuel 0 --ifuel 0"
 val mul_ntt_ok:
     f:rq
   -> g:rq
@@ -630,221 +1046,3 @@ let mul_ntt_ok f g =
   intt_ntt_is_id (mul_quotient_ring f g);
   assert (mul_quotient_ring f g == intt (mul_componentwise (ntt f) (ntt g)))
   
-
-
-// val ntt_inner_inner:
-//     z:zq
-//   -> f:tq
-//   -> j:nat
-//   -> len:len_t
-//   -> start:start_t len
-//   -> Tot (tq) (decreases (start + len) - j)
-// let rec ntt_inner_inner z f j len start: tq =
-//   // for j <- start; j < start + len; j++
-//   if j < (start + len) then
-//     // t <- zeta * f_hat[j+ len]
-//     let t = mul_zq z (index_tq f (j + len)) in
-//     let f_j = index_tq f j in
-//     // f_hat[j + len] <- f_hat[j] - t
-//     let f_upd = upd_tq f (j + len) (add_zq f_j (neg_zq t)) in
-//     // f_hat[j] <- f_hat[j] + t
-//     let f_upd_upd = upd_tq f_upd j (add_zq f_j t) in
-//     ntt_inner_inner z f_upd_upd (j + 1) len start
-//   else
-//     f
-
-// val ntt_inner_inner_f (j:nat{j < 256}) (len:len_t) (start:start_t len) (z:zq) (f:tq): zq
-// let ntt_inner_inner_f j len start z f =
-//     if j < start || j >= start + 2 * len then
-//       index_tq f j
-//     else if j >= start && j < start + len then
-//       let t = mul_zq z (index_tq f (j + len)) in
-//       add_zq (index_tq f j) t
-//     else
-//       let t = mul_zq z (index_tq f j) in
-//       add_zq (index_tq f (j - len)) (neg_zq t)
-
-
-// val ntt_inner_inner_func:
-//     z:zq 
-//   -> f:tq 
-//   -> len:len_t
-//   -> start:start_t len
-//   -> tq
-// let ntt_inner_inner_func z f len start = 
-//   let rq_rep = createi #zq 256 (fun j -> ntt_inner_inner_f j len start z f) in rq_to_tq rq_rep
-
-// // val ntt_inner_inner_func_ok: 
-// //     z:zq
-// //   -> f:tq
-// //   -> len:len_t
-// //   -> start:start_t len
-// //   -> Lemma (ensures ntt_inner_inner z f start len start = ntt_inner_inner_func z f len start)
-// // let ntt_inner_inner_func_ok z f len start = ()
-
-// val zeta_to_k:
-//     k:nat{k < 128}
-//   -> zq
-// let zeta_to_k k = pow_mod #q zeta k
-// let test = 
-//   let zeta_0 = pow_mod #q zeta 0 in
-//   pow_mod_def #q zeta 0;
-//   lemma_pow_mod #q zeta 0;
-//   lemma_pow0 zeta;
-//   assert (zeta_0 = 1);
-//   ()
-
-// val zeta_to_k_pos_lemma: (k:nat{k > 0 && k < 128}) -> Lemma (requires True) (ensures (zeta_to_k k = mul_zq (zeta_to_k (k - 1)) zeta))
-// let zeta_to_k_pos_lemma k = 
-//   pow_mod_def #q zeta k;
-//   lemma_pow_mod #q zeta k;
-//   lemma_pow_unfold zeta k;
-//   assert (pow zeta k % q = zeta_to_k k);
-//   assert (zeta * pow zeta (k - 1) % q = zeta_to_k k);
-//   lemma_pow_mod #q zeta (k - 1);
-//   assert (pow zeta (k - 1) % q = zeta_to_k (k - 1));
-//   ()
-
-// val ntt_outer_inner_body:
-//     f:tq
-//   -> len:len_t
-//   -> start:start_t len
-//   -> k:nat{k < 128}
-//   -> tq
-// let ntt_outer_inner_body f len start k = 
-//   // zeta <- Zeta ^ (BitRev7(k)) mod q
-//   let z = pow_mod #q zeta (bitrev7_int k) in
-//   let f_upd = ntt_inner_inner z f start len start in
-//   f_upd
-
-// val ntt_outer_inner:
-//     f:tq
-//   -> len:len_t
-//   -> start:start_t len
-//   -> Tot (tq) (decreases (256 - 2 * len) - start)
-// let rec ntt_outer_inner f len start =
-//   let k = (128 / len) + (start / (2 * len)) in
-//   let f_upd:tq = ntt_outer_inner_body f len start k in
-//   if start + 2 * len >= 256 then 
-//     f_upd
-//   else
-//     ntt_outer_inner f_upd len (start + 2 * len)
-
-// val ntt_outer:
-//     len:len_t
-//   -> f:tq
-//   -> Tot tq (decreases len)
-// let rec ntt_outer len f =
-//   let f_upd = ntt_outer_inner f len 0 in
-//   if len = 2 then
-//     f_upd
-//   else
-//     ntt_outer (len / 2) f_upd
-
-// val len_t_lemma: (i:nat{i < 7}) -> 
-//   Lemma (ensures pow2 i = 2 || pow2 i = 4 || pow2 i = 8 || pow2 i = 16 || pow2 i = 32 || pow2 i = 64)
-// let len_t_lemma i = admit()
-
-// val ntt_outer_intermediate:
-//     f:tq
-//   -> i:nat{i < 7}
-//   -> Tot tq (decreases i)
-// let rec ntt_outer_intermediate f i =
-//   len_t_lemma (6-i);
-//   let len:len_t = 128 / (pow2 (6-i)) in
-//   let f_upd = ntt_outer_inner f len 0 in
-//   if i = 0 then
-//     f_upd
-//   else
-//     ntt_outer_intermediate f_upd (i-1)
-
-// // val ntt_outer_int_ok: 
-// //     f:tq
-// //   -> Lemma (requires True) (ensures (ntt_outer 128 f = ntt_outer_intermediate f 6))
-// // let ntt_outer_int_ok f =
-// //   assert (ntt_outer 2 f = ntt_outer_intermediate f 0);
-// //   ()
-
-// let ntt (f:rq): tq =
-//   let ntt_image = ntt_outer 128 (rq_to_tq f) in 
-//   ntt_image
-
-// val intt_inner_inner:
-//     z:zq
-//   -> f:tq
-//   -> j:nat
-//   -> len:len_t
-//   -> start:start_t len
-//   -> Tot (tq) (decreases (start + len) - j)
-// let rec intt_inner_inner z f j len start: tq =
-//   // for j <- start; j < start + len; j++
-//   if j < (start + len) then
-//     // t <- zeta * f_hat[j+ len]
-//     let t = (index_tq f j) in 
-//     // f[j] <- t + f[j+len]
-//     let f_j = add_zq t (index_tq f (j + len)) in
-//     let f_upd = upd_tq f j f_j in
-//     // f[j+len] <- zeta * (f[j+len] - t)
-//     let f_j_len = mul_zq z (add_zq (index_tq f (j + len)) (neg_zq t)) in
-//     let f_upd_upd = upd_tq f_upd (j + len) f_j_len in
-//     intt_inner_inner z f_upd_upd (j + 1) len start
-//   else
-//     f
-
-// val intt_outer_inner_body:
-//     f:tq
-//   -> len:len_t
-//   -> start:start_t len
-//   -> k:nat{k < 128}
-//   -> tq
-// let intt_outer_inner_body f len start k =
-//   // zeta <- Zeta ^ (BitRev7(k)) mod q
-//   let z = pow_mod #q zeta (bitrev7_int k) in
-//   let f_upd = intt_inner_inner z f start len start in
-//   f_upd
-
-
-// val intt_outer_inner:
-//     f:tq
-//   -> len:len_t
-//   -> start:start_t len
-//   -> Tot tq (decreases (256 - 2 * len) - start)
-// let rec intt_outer_inner f len start =
-//   let k = (256 / len) - (start / (2 * len)) - 1 in
-//   // zeta <- Zeta ^ (BitRev7(k)) mod q
-//   let z = pow_mod #q zeta (bitrev7_int k) in
-//   let f_upd = intt_outer_inner_body f len start k in
-//   if start + 2 * len >= 256 then
-//     f_upd
-//   else
-//     intt_outer_inner f_upd len (start + 2 * len)
-
-// val intt_outer:
-//     len:len_t
-//   -> f:tq
-//   -> Tot tq (decreases (128 - len))
-// let rec intt_outer len f =
-//   let f_upd = intt_outer_inner f len 0 in
-//   if len = 128 then
-//     f_upd
-//   else
-//     intt_outer (len * 2) f_upd
-
-// val intt:
-//     f:tq
-//   -> rq
-// let intt f =
-//   let intt_image = intt_outer 128 f in 
-//   let unscaled_intt = tq_to_rq intt_image in
-//   scalar_mul unscaled_intt 3303
-
-// // NTT multiplication specification
-// // i-th coordinate in Tq of the product hat(h) = hat(f) x_Tq hat(g) is given by:
-// //    hat(h)[2i] + hat(h)[2i+1] = (hat(f)[2i]+hat(f)[2i+1]X) * (hat(g)[2i]+hat(g)[2i+1]X) mod (X^2 - zeta^(2 BitRev_7(i)+1))
-
-// // index f i should yield an lpoly 2 which is equivalent to f[2i]+f[2i+1]X
-// // ntt_mul_base calculates the product of two lpoly 2 with modulus X^2 - gamma
-// let ntt_mul_base (a b:lpoly 2) (gamma: zq): lpoly 2 =
-//   let c0 = add_zq (mul_zq (index a 0) (index b 0)) (mul_zq gamma (mul_zq (index a 1) (index b 1))) in
-//   let c1 = add_zq (mul_zq (index a 0) (index b 1)) (mul_zq (index a 1) (index b 0)) in
-//   cons c0 (cons c1 empty)
