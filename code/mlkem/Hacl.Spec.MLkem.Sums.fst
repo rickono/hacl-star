@@ -8,6 +8,8 @@ open Lib.IntTypes
 open Lib.Sequence
 open Lib.NatMod
 open Hacl.Spec.MLkem.Zq
+open FStar.Math.Lemmas
+open Hacl.Spec.MLkem.PowModInt
 
 // sum_of_zqs is sum_{i=start}^{stop-1} f(i)
 let rec sum_of_zqs (start:int) (stop:int) (f:(i:int -> zq)): Tot zq (decreases stop - start) =
@@ -167,42 +169,458 @@ let unfold_double_sum_inner (start1 start2 stop1 stop2:int) (f:int -> int -> zq)
   let inner_f_unfolded = (fun i -> (sum_of_zqs start2 (stop2-1) (fun j -> f i j)) +% f i (stop2-1)) in
   sum_rewrite_lemma start1 stop1 inner_f inner_f_unfolded
 
+#reset-options "--z3rlimit 15 --fuel 1 --ifuel 0"
+let unfold_double_sum_a_b_distribute (start1 start2 stop1 stop2:int) (f:int -> int -> zq): 
+  Lemma
+    (requires stop1 > start1 /\ stop2 > start2)
+    (ensures sum_of_zqs start1 (stop1-1) (fun i -> sum_of_zqs start2 (stop2-1) (fun j -> f i j) +% f i (stop2-1))
+          == sum_of_zqs start1 (stop1-1) (fun i -> sum_of_zqs start2 (stop2-1) (fun j -> f i j))
+             +% sum_of_zqs start1 (stop1-1) (fun i -> f i (stop2-1)))
+= 
+  let fun1 = (fun i -> sum_of_zqs start2 (stop2-1) (fun j -> f i j)) in
+  let fun2 = (fun i -> f i (stop2-1)) in
+  let orig_fun = (fun i -> sum_of_zqs start2 (stop2-1) (fun j -> f i j) +% f i (stop2-1)) in
+  distribute_sum_lemma start1 (stop1-1) fun1 fun2
+
+let unfold_double_sum_inner_flipped_aux (start1 start2 stop1 stop2:int) (f:int -> int -> zq) (j:int): 
+  Lemma 
+    (requires stop2 > start2)
+    (ensures sum_of_zqs start2 stop2 (fun i -> f i j) == (sum_of_zqs start2 (stop2-1) (fun i -> f i j)) +% (f (stop2-1) j))
+= unfold_sum start2 stop2 (fun i -> f i j)
+
+let unfold_double_sum_inner_flipped (start1 start2 stop1 stop2:int) (f:int -> int -> zq): Lemma 
+    (requires stop2 > start2)
+    (ensures sum_of_zqs start1 stop1 (fun j -> sum_of_zqs start2 stop2 (fun i -> f i j)) 
+         ==  sum_of_zqs start1 stop1 (fun j -> (sum_of_zqs start2 (stop2-1) (fun i -> f i j)) +% (f (stop2-1) j))) = 
+  let inner_f = (fun j -> sum_of_zqs start2 stop2 (fun i -> f i j)) in
+  let inner_f_unfolded = (fun j -> (sum_of_zqs start2 (stop2-1) (fun i -> f i j)) +% (f (stop2-1) j)) in
+  Classical.forall_intro (Classical.move_requires (unfold_double_sum_inner_flipped_aux start1 start2 stop1 stop2 f))
+
+let unfold_double_sum_a_b_distribute_flipped (start1 start2 stop1 stop2:int) (f:int -> int -> zq): 
+  Lemma
+    (requires stop1 > start1 /\ stop2 > start2)
+    (ensures sum_of_zqs start1 (stop1-1) (fun j -> sum_of_zqs start2 (stop2-1) (fun i -> f i j) +% f (stop2-1) j)
+          == sum_of_zqs start1 (stop1-1) (fun j -> sum_of_zqs start2 (stop2-1) (fun i -> f i j))
+             +% sum_of_zqs start1 (stop1-1) (fun j -> f (stop2-1) j))
+= 
+  let fun1 = (fun j -> sum_of_zqs start2 (stop2-1) (fun i -> f i j)) in
+  let fun2 = (fun j -> f (stop2-1) j) in
+  // let orig_fun = (fun i -> sum_of_zqs start2 (stop2-1) (fun j -> f i j) +% f i (stop2-1)) in
+  distribute_sum_lemma start1 (stop1-1) fun1 fun2
+
+// Unfolding a double sum should give us:
+// sum^n sum^m (f i j) = (sum^n-1 sum^m-1 (f i j)) + (sum^n-1 (f i m)) + (sum^m-1 (f n j)) + (f n m)
+// Call it sum^n sum^m (f i j) = A + B + C + D
+let unfold_double_sum_flipped (start1 start2 stop1 stop2:int) (f:int -> int -> zq): Lemma
+    (requires stop1 > start1 /\ stop2 > start2)
+    (ensures sum_of_zqs start1 stop1 (fun j -> sum_of_zqs start2 stop2 (fun i -> f i j)) 
+              ==  sum_of_zqs start1 (stop1-1) (fun j -> sum_of_zqs start2 (stop2-1) (fun i -> f i j))
+               +% sum_of_zqs start1 (stop1-1) (fun j -> f (stop2-1) j)
+               +% sum_of_zqs start2 (stop2-1) (fun i -> f i (stop1-1))
+               +% f (stop2-1) (stop1-1)) =
+  let a = sum_of_zqs start1 (stop1-1) (fun j -> sum_of_zqs start2 (stop2-1) (fun i -> f i j)) in
+  let b = sum_of_zqs start1 (stop1-1) (fun j -> f (stop2-1) j) in
+  let c = sum_of_zqs start2 (stop2-1) (fun i -> f i (stop1-1)) in
+  let d = f (stop2-1) (stop1-1) in
+  calc (==) {
+    sum_of_zqs start1 stop1 (fun j -> sum_of_zqs start2 stop2 (fun i -> f i j));
+    (==) {unfold_double_sum_inner_flipped start1 start2 stop1 stop2 f}
+    sum_of_zqs start1 stop1 (fun j -> sum_of_zqs start2 (stop2-1) (fun i -> f i j) +% f (stop2-1) j);
+    (==) {unfold_sum start1 stop1 (fun j -> sum_of_zqs start2 (stop2-1) (fun i -> f i j) +% f (stop2-1) j)}
+    sum_of_zqs start1 (stop1-1) (fun j -> sum_of_zqs start2 (stop2-1) (fun i -> f i j) +% f (stop2-1) j) +% c +% d;
+    (==) {unfold_double_sum_a_b_distribute_flipped start1 start2 stop1 stop2 f}
+    a +% b +% c +% d;
+  }
+
+
 // Unfolding a double sum should give us:
 // sum^n sum^m (f i j) = (sum^n-1 sum^m-1 (f i j)) + (sum^n-1 (f i m)) + (sum^m-1 (f n j)) + (f n m)
 // Call it sum^n sum^m (f i j) = A + B + C + D
 let unfold_double_sum (start1 start2 stop1 stop2:int) (f:int -> int -> zq): Lemma
     (requires stop1 > start1 /\ stop2 > start2)
     (ensures sum_of_zqs start1 stop1 (fun i -> sum_of_zqs start2 stop2 (fun j -> f i j)) 
-              ==  sum_of_zqs start1 (stop1-1) (fun i -> 
-                    (sum_of_zqs start2 (stop2-1) (fun j -> f i j)) +% (f i (stop2-1))) 
-                  +% (sum_of_zqs start1 (stop1-1) (fun j -> f (stop1-1) j)) 
+              ==  sum_of_zqs start1 (stop1-1) (fun i -> (sum_of_zqs start2 (stop2-1) (fun j -> f i j)))
+                  +% (sum_of_zqs start1 (stop1-1) (fun i -> f i (stop2-1)))
+                  +% (sum_of_zqs start2 (stop2-1) (fun j -> f (stop1-1) j)) 
                   +% f (stop1-1) (stop2-1)) =
   let a = sum_of_zqs start1 (stop1-1) (fun i -> sum_of_zqs start2 (stop2-1) (fun j -> f i j)) in
   let b = sum_of_zqs start1 (stop1-1) (fun i -> f i (stop2-1)) in
-  let c = sum_of_zqs start1 (stop1-1) (fun j -> f (stop1-1) j) in
+  let c = sum_of_zqs start2 (stop2-1) (fun j -> f (stop1-1) j) in
   let d = f (stop1-1) (stop2-1) in
-  let initial_sum = sum_of_zqs start1 stop1 (fun i -> sum_of_zqs start2 stop2 (fun j -> f i j)) in
-  unfold_double_sum_inner start1 start2 stop1 stop2 f;
-  let unfolded_inner_f = (fun i -> (sum_of_zqs start2 (stop2-1) (fun j -> f i j)) +% (f i (stop2-1))) in
-  assert (initial_sum == sum_of_zqs start1 stop1 (fun i -> unfolded_inner_f i));
-  unfold_sum start1 stop1 unfolded_inner_f;
-  assert (initial_sum == sum_of_zqs start1 (stop1-1) (fun i -> unfolded_inner_f i) +% unfolded_inner_f (stop1-1));
-  let a_f = (fun i -> sum_of_zqs start2 (stop2-1) (fun j -> f i j)) in
-  let b_f = (fun i -> f i (stop2-1)) in
-  distribute_sum_lemma start1 stop1 a_f b_f;
-  // assert (sum_of_zqs start1 (stop1-1));
-  // assert (initial_sum == sum_of_zqs start1 (stop1-1) (fun i -> sum_of_zqs start2 (stop2-1) (fun j -> f i j)) +% sum_of_zqs start1 (stop1-1) (fun i -> f i (stop2-1)) +% unfolded_inner_f (stop1-1));
-  admit()
-  // assert (sum_of_zqs start1 (stop1-1) (fun i -> unfolded_inner_f i)
-  //      == sum_of_zqs start1 (stop1-1) (fun i -> (sum_of_zqs start2 (stop2-1) (fun j -> f i j))) +%
-  //           sum_of_zqs start1 (stop1-1) (fun i -> f i (stop2-1)));
-  // admit()
-  // admit()
+  calc (==) {
+    sum_of_zqs start1 stop1 (fun i -> sum_of_zqs start2 stop2 (fun j -> f i j));
+    (==) {unfold_double_sum_inner start1 start2 stop1 stop2 f}
+    sum_of_zqs start1 stop1 (fun i -> sum_of_zqs start2 (stop2-1) (fun j -> f i j) +% f i (stop2-1));
+    (==) {unfold_sum start1 stop1 (fun i -> sum_of_zqs start2 (stop2-1) (fun j -> f i j) +% f i (stop2-1))}
+    sum_of_zqs start1 (stop1-1) (fun i -> sum_of_zqs start2 (stop2-1) (fun j -> f i j) +% f i (stop2-1)) +% c +% d;
+    (==) {unfold_double_sum_a_b_distribute start1 start2 stop1 stop2 f}
+    a +% b +% c +% d;
+  }
 
+#reset-options "--z3rlimit 10 --fuel 1 --ifuel 0"
+let swap_sum_order_base_1 (start1 stop1 start2 stop2:int) (f:int -> int -> zq): Lemma 
+  (requires start1 + 1 = stop1)
+  (ensures sum_of_zqs start1 stop1 (fun i -> sum_of_zqs start2 stop2 (fun j -> f i j)) 
+        == sum_of_zqs start2 stop2 (fun j -> sum_of_zqs start1 stop1 (fun i -> f i j))) 
+=
+  calc (==) {
+    sum_of_zqs start1 (start1+1) (fun i -> sum_of_zqs start2 stop2 (fun j -> f i j));
+    (==) {unfold_sum start1 (start1+1) (fun i -> sum_of_zqs start2 stop2 (fun j -> f i j))}
+    sum_of_zqs start1 start1 (fun i -> sum_of_zqs start2 stop2 (fun j -> f i j)) +% sum_of_zqs start2 stop2 (fun j -> f start1 j);
+    (==) {lemma_sum_none start1 (fun i -> sum_of_zqs start2 stop2 (fun j -> f i j))}
+    sum_of_zqs start2 stop2 (fun j -> f start1 j);
+  };
+  calc (==) {
+    sum_of_zqs start2 stop2 (fun j -> sum_of_zqs start1 (start1+1) (fun i -> f i j));
+    (==) {unfold_double_sum_inner_flipped start2 start1 stop2 (start1+1) f}
+    sum_of_zqs start2 stop2 (fun j -> sum_of_zqs start1 start1 (fun i -> f i j) +% f start1 j);
+    (==) {}
+    sum_of_zqs start2 stop2 (fun j -> f start1 j);
+  }
+
+#reset-options "--z3rlimit 15 --fuel 1 --ifuel 0"
+let swap_sum_order_base_2 (start1 stop1 start2 stop2:int) (f:int -> int -> zq): Lemma 
+  (requires start2 + 1 = stop2)
+  (ensures sum_of_zqs start1 stop1 (fun i -> sum_of_zqs start2 stop2 (fun j -> f i j)) 
+        == sum_of_zqs start2 stop2 (fun j -> sum_of_zqs start1 stop1 (fun i -> f i j))) 
+=
+  calc (==) {
+    sum_of_zqs start2 (start2+1) (fun j -> sum_of_zqs start1 stop1 (fun i -> f i j));
+    (==) {unfold_sum start2 (start2+1) (fun j -> sum_of_zqs start1 stop1 (fun i -> f i j))}
+    sum_of_zqs start2 start2 (fun j -> sum_of_zqs start1 stop1 (fun i -> f i j)) +% sum_of_zqs start1 stop1 (fun i -> f i start2);
+    (==) {lemma_sum_none start2 (fun j -> sum_of_zqs start1 stop1 (fun i -> f i j))}
+    sum_of_zqs start1 stop1 (fun i -> f i start2);
+  };
+  calc (==) {
+    sum_of_zqs start1 stop1 (fun i -> sum_of_zqs start2 (start2+1) (fun j -> f i j));
+    (==) {unfold_double_sum_inner start1 start2 stop1 (start2+1) f}
+    sum_of_zqs start1 stop1 (fun i -> sum_of_zqs start2 start2 (fun j -> f i j) +% f i start2);
+    (==) {}
+    sum_of_zqs start1 stop1 (fun i -> f i start2);
+  }
 
 let rec swap_sum_order (start1 stop1 start2 stop2:int) (f:int -> int -> zq): Lemma
-    // (requires True)
+    (requires stop1 > start1 /\ stop2 > start2)
     (ensures sum_of_zqs start1 stop1 (fun i -> sum_of_zqs start2 stop2 (fun j -> f i j)) 
           == sum_of_zqs start2 stop2 (fun j -> sum_of_zqs start1 stop1 (fun i -> f i j)))
     (decreases (stop1 - start1)) =
-  admit()
+  if start1 + 1 = stop1 then swap_sum_order_base_1 start1 stop1 start2 stop2 f
+  else if start2 + 1 = stop2 then swap_sum_order_base_2 start1 stop1 start2 stop2 f
+  else
+    calc (==) {
+      sum_of_zqs start1 stop1 (fun i -> sum_of_zqs start2 stop2 (fun j -> f i j));
+      (==) {unfold_double_sum start1 start2 stop1 stop2 f}
+      sum_of_zqs start1 (stop1-1) (fun i -> sum_of_zqs start2 (stop2-1) (fun j -> f i j))
+          +% sum_of_zqs start1 (stop1-1) (fun i -> f i (stop2-1))
+          +% sum_of_zqs start2 (stop2-1) (fun j -> f (stop1-1) j) 
+          +% f (stop1-1) (stop2-1);
+      (==) {swap_sum_order start1 (stop1-1) start2 (stop2-1) f}
+      sum_of_zqs start2 (stop2-1) (fun j -> sum_of_zqs start1 (stop1-1) (fun i -> f i j))
+          +% sum_of_zqs start1 (stop1-1) (fun i -> f i (stop2-1))
+          +% sum_of_zqs start2 (stop2-1) (fun j -> f (stop1-1) j) 
+          +% f (stop1-1) (stop2-1);
+      (==) {lemma_rearrange (sum_of_zqs start2 (stop2-1) (fun j -> sum_of_zqs start1 (stop1-1) (fun i -> f i j)))
+                            (sum_of_zqs start1 (stop1-1) (fun i -> f i (stop2-1)))
+                            (sum_of_zqs start2 (stop2-1) (fun j -> f (stop1-1) j))
+                            (f (stop1-1) (stop2-1))}
+      sum_of_zqs start2 (stop2-1) (fun j -> sum_of_zqs start1 (stop1-1) (fun i -> f i j))
+          +% sum_of_zqs start2 (stop2-1) (fun j -> f (stop1-1) j) 
+          +% sum_of_zqs start1 (stop1-1) (fun i -> f i (stop2-1))
+          +% f (stop1-1) (stop2-1);
+      (==) {unfold_double_sum_flipped start2 start1 stop2 stop1 f}
+      sum_of_zqs start2 stop2 (fun j -> sum_of_zqs start1 stop1 (fun i -> f i j));
+    }
+
+let rec lemma_sum_join (i j k:int) (f:int -> zq): Lemma
+  (requires i <= j /\ j <= k)
+  (ensures sum_of_zqs i k f == sum_of_zqs i j f +% sum_of_zqs j k f)
+  (decreases (k - j)) =
+if j < k then 
+  calc (==) {
+    sum_of_zqs i j f +% sum_of_zqs j k f;
+    (==) {unfold_sum j k f}
+    sum_of_zqs i j f +% sum_of_zqs j (k - 1) f +% f (k - 1);
+    (==) {lemma_sum_join i j (k - 1) f}
+    sum_of_zqs i (k - 1) f +% f (k - 1);
+  }
+
+let rec lemma_sum_shift (start stop:int) (shift:int) (f g:int -> zq): Lemma 
+  (requires (forall (i:int). start <= i /\ i < stop ==> f i == g (i + shift)))
+  (ensures sum_of_zqs start stop f == sum_of_zqs (start + shift) (stop + shift) g)
+  (decreases (stop - start)) =
+  if start < stop then lemma_sum_shift start (stop - 1) shift f g
+
+let rewrite_shifted_idx_aux (stop:pos) (f:int -> zq) (j i:int): Lemma
+  (f ((i - j) % stop) == f ((i - (j % stop)) % stop))
+= 
+  calc (==) {
+    (i - j) % stop;
+    (==) {lemma_mod_sub_distr i j stop}
+    (i - j % stop) % stop;
+  }
+
+let rewrite_shifted_idx (stop:pos) (f:int -> zq) (j:int): Lemma
+  (sum_of_zqs 0 stop (fun i -> f ((i - j) % stop))
+  == sum_of_zqs 0 stop (fun i -> f ((i - (j % stop)) % stop)))
+= 
+  Classical.forall_intro (rewrite_shifted_idx_aux stop f j)
+
+let lemma_sum_shift_mod_sum1_aux (stop:pos) (f:int -> zq) (r:nat_mod stop) (i:int): Lemma
+  (requires 0 <= i /\ i < r)
+  (ensures f ((i - r) % stop) == f (i - r + stop))
+= ()
+
+let lemma_sum_shift_mod_sum1 (stop:pos) (f:int -> zq) (r:nat_mod stop): Lemma
+    (sum_of_zqs 0 r (fun i -> f ((i - r) % stop))
+  == sum_of_zqs 0 r (fun i -> f (i - r + stop)))
+= 
+  Classical.forall_intro (Classical.move_requires (lemma_sum_shift_mod_sum1_aux stop f r))
+
+let lemma_sum_shift_mod_sum2_aux (stop:pos) (f:int -> zq) (r:nat_mod stop) (i:int): Lemma 
+  (requires r <= i /\ i < stop)
+  (ensures f ((i - r) % stop) == f (i - r))
+= ()
+
+let lemma_sum_shift_mod_sum2 (stop:pos) (f:int -> zq) (r:nat_mod stop): Lemma 
+    (sum_of_zqs r stop (fun i -> f ((i - r) % stop))
+  == sum_of_zqs r stop (fun i -> f (i - r)))
+= Classical.forall_intro (Classical.move_requires (lemma_sum_shift_mod_sum2_aux stop f r))
+
+let lemma_sum_shift_mod_sum1_shift (stop:pos) (f:int -> zq) (r:nat_mod stop): Lemma 
+    (sum_of_zqs 0 r (fun i -> f (i - r + stop))
+  == sum_of_zqs (stop - r) stop f)
+= 
+  let shifted_f = (fun i -> f (i - r + stop)) in
+  // assert (forall (i:int). 0 <= i /\ i < r ==> f i == shifted_f (i + r - stop));
+  calc (==) {
+    sum_of_zqs (stop - r) stop f;
+    (==) {lemma_sum_shift (stop - r) stop (r - stop) f shifted_f}
+    sum_of_zqs 0 r shifted_f;
+  }
+
+let lemma_sum_shift_mod_sum2_shift (stop:pos) (f:int -> zq) (r:nat_mod stop): Lemma 
+    (sum_of_zqs r stop (fun i -> f (i - r))
+  == sum_of_zqs 0 (stop - r) f)
+= 
+  let shifted_f = (fun i -> f (i - r)) in
+  assert (forall (i:int). 0 <= i /\ i < r ==> f i == shifted_f (i + r));
+  calc (==) {
+    sum_of_zqs 0 (stop - r) f;
+    (==) {lemma_sum_shift 0 (stop - r) r f shifted_f}
+    sum_of_zqs r stop shifted_f;
+  }
+
+let lemma_sum_shift_mod (stop:nat{stop > 0}) (j:int) (f:int -> zq): 
+Lemma 
+  (sum_of_zqs 0 stop f == sum_of_zqs 0 stop (fun i -> f ((i - j) % stop)))
+= 
+  let q = j / stop in
+  let r = j % stop in
+  calc (==) {
+    sum_of_zqs 0 stop (fun i -> f ((i - j) % stop));
+    (==) {rewrite_shifted_idx stop f j}
+    sum_of_zqs 0 stop (fun i -> f ((i - r) % stop));
+    (==) {lemma_sum_join 0 r stop (fun i -> f ((i - r) % stop))}
+    sum_of_zqs 0 r (fun i -> f ((i - r) % stop)) +% sum_of_zqs r stop (fun i -> f ((i - r) % stop));
+    (==) {lemma_sum_shift_mod_sum1 stop f r}
+    sum_of_zqs 0 r (fun i -> f (i - r + stop)) +% sum_of_zqs r stop (fun i -> f ((i - r) % stop));
+    (==) {lemma_sum_shift_mod_sum2 stop f r}
+    sum_of_zqs 0 r (fun i -> f (i - r + stop)) +% sum_of_zqs r stop (fun i -> f (i - r));
+    (==) {lemma_sum_shift_mod_sum1_shift stop f r}
+    sum_of_zqs (stop - r) stop f +% sum_of_zqs r stop (fun i -> f (i - r));
+    (==) {lemma_sum_shift_mod_sum2_shift stop f r}
+    sum_of_zqs (stop - r) stop f +% sum_of_zqs 0 (stop - r) f;
+    (==) {lemma_sum_join 0 (stop - r) stop f}
+    sum_of_zqs 0 stop f;
+  }
+
+let lemma_geometric_sum_base a: Lemma
+  (requires a % q <> 1)
+  (ensures sum_of_zqs 0 1 (fun i -> pow_mod_int #q a i) == (((pow_mod_int #q a 1) - 1) % q) %* (pow_mod_int #q ((a - 1) % q) (-1)))
+= 
+  calc (==) {
+    sum_of_zqs 0 1 (fun i -> pow_mod_int #q a i);
+    (==) {}
+    pow_mod_int #q a 0;
+    (==) {lemma_pow_mod_int_pow0 #q a}
+    1;
+  };
+  calc (==) {
+    (((pow_mod_int #q a 1) - 1) % q) %* (pow_mod_int #q ((a - 1) % q) (-1));
+    (==) {lemma_pow_mod_int_pow1 #q a}
+    (a - 1) % q %* (pow_mod_int #q ((a - 1) % q) (-1));
+    (==) {lemma_pow_mod_int_pow1 #q ((a - 1) % q)}
+    (pow_mod_int #q ((a - 1) % q) 1) %*  (pow_mod_int #q ((a - 1) % q) (-1));
+    (==) {lemma_pow_mod_inv_def #q ((a - 1) % q) 1}
+    1;
+  }
+
+let lemma_geosum_rearr_for_distr_rearr (a b c:zq): Lemma 
+  (ensures (a %* (b %* c)) == (c %* a %* b)) =
+calc (==) {
+  a %* (b %* c);
+  (==) {}
+  a %* (c %* b);
+  (==) {}
+  a %* c %* b;
+  (==) {}
+  c %* a %* b;
+}
+
+let lemma_geosum_rearr_for_distr (stop:pos) (a:zq): Lemma
+  (requires a % q <> 1)
+  (ensures (((pow_mod_int #q a (stop-1) - 1) % q) %* pow_mod_int #q ((a - 1) % q) (-1)) +% pow_mod_int #q a (stop-1) %* (pow_mod_int #q ((a - 1) % q) (1) %* pow_mod_int #q ((a - 1) % q) (-1))
+        == (((pow_mod_int #q a (stop-1) - 1) % q) %* pow_mod_int #q ((a - 1) % q) (-1)) +% pow_mod_int #q a (stop-1) %* (pow_mod_int #q ((a - 1) % q) (1) %* pow_mod_int #q ((a - 1) % q) (-1)))
+= 
+  calc (==) {
+    (((pow_mod_int #q a (stop-1) - 1) % q) %* pow_mod_int #q ((a - 1) % q) (-1)) +% pow_mod_int #q a (stop-1) %* (pow_mod_int #q ((a - 1) % q) (1) %* pow_mod_int #q ((a - 1) % q) (-1));
+    (==) {lemma_mul_mod_comm ((pow_mod_int #q a (stop-1) - 1) % q) (pow_mod_int #q ((a - 1) % q) (-1))}
+    (pow_mod_int #q ((a - 1) % q) (-1) %* ((pow_mod_int #q a (stop-1) - 1) % q) ) +% pow_mod_int #q a (stop-1) %* (pow_mod_int #q ((a - 1) % q) (1) %* pow_mod_int #q ((a - 1) % q) (-1));
+    (==) {lemma_geosum_rearr_for_distr_rearr (pow_mod_int #q a (stop-1)) (pow_mod_int #q ((a - 1) % q) (1)) (pow_mod_int #q ((a - 1) % q) (-1))}
+    (pow_mod_int #q ((a - 1) % q) (-1) %* ((pow_mod_int #q a (stop-1) - 1) % q) ) +% pow_mod_int #q ((a - 1) % q) (-1) %* pow_mod_int #q a (stop-1) %* (pow_mod_int #q ((a - 1) % q) (1));
+  }
+
+let lemma_mod_sub_distr_l (a b:int) (m:pos): Lemma
+  ((a - b) % m == (a % m - b) % m)
+= 
+  calc (==) {
+    (a - b) % m;
+    (==) {}
+    (-b + a) % m;
+    (==) {lemma_mod_add_distr (-b) a m}
+    (-b + a % m) % m;
+    (==) {}
+    (a % m - b) % m;
+  }
+
+#reset-options "--z3rlimit 20 --fuel 0 --ifuel 0"
+let lemma_geosum_distr_inner (stop:pos) (a:zq): Lemma
+  (requires a % q <> 1 && stop > 1)
+  (ensures pow_mod_int #q a (stop-1) %* pow_mod_int #q ((a - 1) % q) (1)
+        == pow_mod_int #q a stop -% pow_mod_int #q a (stop - 1))
+= 
+  calc (==) {
+    pow_mod_int #q a (stop-1) %* pow_mod_int #q ((a - 1) % q) (1);
+    (==) {lemma_pow_mod_int_pow1 #q ((a - 1) % q)}
+    pow_mod_int #q a (stop-1) %* ((a - 1) % q);
+    (==) {}
+    pow_mod_int #q a (stop-1) * ((a - 1) % q) % q;
+    (==) {lemma_mod_mul_distr_r (pow_mod_int #q a (stop-1)) (a - 1) q}
+    pow_mod_int #q a (stop-1) * (a - 1) % q;
+    (==) {distributivity_sub_right (pow_mod_int #q a (stop-1)) a 1}
+    (pow_mod_int #q a (stop-1) * a - pow_mod_int #q a (stop-1)) % q;
+    (==) {lemma_mod_sub_distr_l (pow_mod_int #q a (stop-1) * a) (pow_mod_int #q a (stop-1)) q}
+    ((pow_mod_int #q a (stop-1) * a % q) - pow_mod_int #q a (stop-1)) % q;
+    (==) {lemma_pow_mod #q a (stop-1)}
+    (((pow a (stop-1) % q) * a % q) - pow_mod_int #q a (stop-1)) % q;
+    (==) {lemma_mod_mul_distr_l (pow a (stop-1)) a q}
+    (((pow a (stop-1)) * a % q) - pow_mod_int #q a (stop-1)) % q;
+    (==) {lemma_pow_unfold a stop}
+    ((pow a stop % q) - pow_mod_int #q a (stop-1)) % q;
+    (==) {lemma_pow_mod #q a stop}
+    (pow_mod_int #q a stop - pow_mod_int #q a (stop-1)) % q;
+  }
+
+let lemma_geometric_sum_rearrange (stop:pos) (a:zq): Lemma 
+  (requires a % q <> 1)
+  (ensures  (((pow_mod_int #q a (stop-1) - 1) % q) %* pow_mod_int #q ((a - 1) % q) (-1)) +% pow_mod_int #q a (stop-1)
+        == (((pow_mod_int #q a (stop-1) - 1) % q) %* pow_mod_int #q ((a - 1) % q) (-1)) +% pow_mod_int #q a (stop-1) %* pow_mod_int #q ((a - 1) % q) (1) %* pow_mod_int #q ((a - 1) % q) (-1))
+= 
+  calc (==) {
+    (((pow_mod_int #q a (stop-1) - 1) % q) %* pow_mod_int #q ((a - 1) % q) (-1)) +% pow_mod_int #q a (stop-1);
+      (==) {}
+      (((pow_mod_int #q a (stop-1) - 1) % q) %* pow_mod_int #q ((a - 1) % q) (-1)) +% pow_mod_int #q a (stop-1) * 1;
+      (==) {lemma_pow_mod_inv_def #q ((a - 1) % q) 1}
+      (((pow_mod_int #q a (stop-1) - 1) % q) %* pow_mod_int #q ((a - 1) % q) (-1)) +% pow_mod_int #q a (stop-1) %* (pow_mod_int #q ((a - 1) % q) (1) %* pow_mod_int #q ((a - 1) % q) (-1));
+      (==) {}
+      (((pow_mod_int #q a (stop-1) - 1) % q) %* pow_mod_int #q ((a - 1) % q) (-1)) +% pow_mod_int #q a (stop-1) %* pow_mod_int #q ((a - 1) % q) (1) %* pow_mod_int #q ((a - 1) % q) (-1);
+  }
+
+let lemma_geometric_sum_final_rewrite (stop:pos) (a:zq): Lemma 
+  (requires a % q <> 1)
+  (ensures  (((pow_mod_int #q a (stop-1) - 1) % q) +% (pow_mod_int #q a stop -% pow_mod_int #q a (stop - 1)))
+        == (((pow_mod_int #q a stop) - 1) % q))
+= 
+  calc (==) {
+    ((pow_mod_int #q a (stop-1) - 1) % q) +% (pow_mod_int #q a stop -% pow_mod_int #q a (stop - 1));
+    (==) {}
+    (((pow_mod_int #q a (stop-1) - 1) % q) + (pow_mod_int #q a stop - pow_mod_int #q a (stop - 1)) % q) % q;
+    (==) {}
+    ((pow_mod_int #q a (stop-1) - 1) + (pow_mod_int #q a stop - pow_mod_int #q a (stop - 1))) % q;
+    (==) {}
+    (pow_mod_int #q a (stop-1) - 1 + (pow_mod_int #q a stop - pow_mod_int #q a (stop - 1))) % q;
+    (==) {}
+    (pow_mod_int #q a (stop-1) - 1 + pow_mod_int #q a stop - pow_mod_int #q a (stop - 1)) % q;
+  }
+
+#reset-options "--z3rlimit 15 --fuel 1 --ifuel 0"
+let rec lemma_geometric_sum (stop:pos) (a:zq): Lemma 
+  (requires a % q <> 1)
+  (ensures sum_of_zqs 0 stop (fun i -> pow_mod_int #q a i) == ((pow_mod_int #q a stop) -% 1) %* (pow_mod_int #q ((a - 1) % q) (-1)))
+  (decreases stop)
+= 
+  if stop = 1 then lemma_geometric_sum_base a
+  else
+    calc (==) {
+      sum_of_zqs 0 stop (fun i -> pow_mod_int #q a i);
+      (==) {}
+      sum_of_zqs 0 (stop-1) (fun i -> pow_mod_int #q a i) +% pow_mod_int #q a (stop-1);
+      (==) {lemma_geometric_sum (stop-1) a}
+      (((pow_mod_int #q a (stop-1) - 1) % q) %* pow_mod_int #q ((a - 1) % q) (-1)) +% pow_mod_int #q a (stop-1);
+      (==) {lemma_geometric_sum_rearrange stop a}
+      (((pow_mod_int #q a (stop-1) - 1) % q) %* pow_mod_int #q ((a - 1) % q) (-1)) +% pow_mod_int #q a (stop-1) %* pow_mod_int #q ((a - 1) % q) (1) %* pow_mod_int #q ((a - 1) % q) (-1);
+      (==) {lemma_mod_distributivity_add_left #q ((pow_mod_int #q a (stop-1) - 1) % q) (pow_mod_int #q a (stop-1) %* pow_mod_int #q ((a - 1) % q) (1)) (pow_mod_int #q ((a - 1) % q) (-1))}
+      (((pow_mod_int #q a (stop-1) - 1) % q) +% (pow_mod_int #q a (stop-1) %* pow_mod_int #q ((a - 1) % q) (1))) %* (pow_mod_int #q ((a - 1) % q) (-1));
+      (==) {lemma_geosum_distr_inner stop a}
+      (((pow_mod_int #q a (stop-1) - 1) % q) +% (pow_mod_int #q a stop -% pow_mod_int #q a (stop - 1))) %* (pow_mod_int #q ((a - 1) % q) (-1));
+      (==) {lemma_geometric_sum_final_rewrite stop a}
+      ((pow_mod_int #q a stop) -% 1) %* (pow_mod_int #q ((a - 1) % q) (-1));
+    }
+
+let rec lemma_zq_sum_ones (start stop:nat): Lemma 
+  (requires start <= stop)
+  (ensures sum_of_zqs start stop (fun i -> 1) == (stop - start) % q)
+= if start = stop then ()
+  else 
+    calc (==) {
+      sum_of_zqs start stop (fun i -> 1);
+      (==) {unfold_sum start stop (fun i -> 1)}
+      sum_of_zqs start (stop-1) (fun i -> 1) +% 1;
+      (==) {lemma_zq_sum_ones start (stop-1)}
+      (((stop-1) - start) % q) +% 1;
+      (==) {}
+      ((stop - 1) - start + 1) % q;
+    }
+
+let lemma_geometric_sum_ones_aux (stop:pos): Lemma
+  (ensures sum_of_zqs 0 stop (fun i -> pow_mod_int #q 1 i) == sum_of_zqs 0 stop (fun i -> 1))
+= 
+  Classical.forall_intro (lemma_pow_mod_int_one #q)
+
+#reset-options "--z3rlimit 15 --fuel 1 --ifuel 0 --query_stats"
+let lemma_geometric_sum_ones (stop:pos) (a:zq): Lemma
+  (requires a % q = 1)
+  (ensures sum_of_zqs 0 stop (fun i -> pow_mod_int #q a i) == stop % q)
+= 
+  calc (==) {
+    sum_of_zqs 0 stop (fun i -> pow_mod_int #q 1 i);
+    (==) {lemma_geometric_sum_ones_aux stop}
+    sum_of_zqs 0 stop (fun i -> 1);
+    (==) {lemma_zq_sum_ones 0 stop}
+    stop % q;
+  }
+
+let rec lemma_sum_zeros (start stop:nat): Lemma
+  (requires start <= stop)
+  (ensures sum_of_zqs start stop (fun i -> 0) == 0)
+= if start = stop then ()
+  else
+    calc (==) {
+      sum_of_zqs start stop (fun i -> 0);
+      (==) {unfold_sum start stop (fun i -> 0)}
+      sum_of_zqs start (stop-1) (fun i -> 0) +% 0;
+      (==) {lemma_sum_zeros start (stop-1)}
+      0 +% 0;
+      (==) {}
+      0;
+    }
