@@ -624,3 +624,35 @@ let rec lemma_sum_zeros (start stop:nat): Lemma
       (==) {}
       0;
     }
+
+let lemma_sum_split_parity_rearrange (a b c d:zq): Lemma (a +% b +% c +% d == (a +% c) +% (b +% d)) =
+  calc (==) {
+    a +% b +% c +% d;
+    (==) {}
+    a +% (b +% c) +% d;
+    (==) {}
+    a +% (c +% b) +% d;
+    (==) {}
+    a +% c +% b +% d;
+  }
+
+let rec lemma_sum_split_parity (stop:nat{stop % 2 = 0}) (f:int -> zq): Lemma 
+  (requires stop >= 0)
+  (ensures sum_of_zqs 0 stop f == sum_of_zqs 0 (stop/2) (fun i -> f (2 * i)) +% sum_of_zqs 0 (stop/2) (fun i -> f (2 * i + 1)))
+= if stop = 0 then ()
+  else
+    calc (==) {
+      sum_of_zqs 0 stop f;
+      (==) {unfold_sum 0 stop f}
+      sum_of_zqs 0 (stop-1) f +% f (stop-1);
+      (==) {unfold_sum 0 (stop-1) f}
+      sum_of_zqs 0 (stop-2) f +% f (stop-2) +% f (stop-1);
+      (==) {lemma_sum_split_parity (stop-2) f}
+      sum_of_zqs 0 ((stop-2)/2) (fun i -> f (2 * i)) +% sum_of_zqs 0 ((stop-2)/2) (fun i -> f (2 * i + 1)) +% f (stop-2) +% f (stop-1);
+      (==) {lemma_sum_split_parity_rearrange (sum_of_zqs 0 ((stop-2)/2) (fun i -> f (2 * i))) (sum_of_zqs 0 ((stop-2)/2) (fun i -> f (2 * i + 1))) (f (stop-2)) (f (stop-1))}
+      (sum_of_zqs 0 ((stop-2)/2) (fun i -> f (2 * i)) +% f (stop-2)) +% (sum_of_zqs 0 ((stop-2)/2) (fun i -> f (2 * i + 1)) +% f (stop-1));
+      (==) {unfold_sum 0 (stop/2) (fun i -> f (2 * i))}
+      (sum_of_zqs 0 (stop/2) (fun i -> f (2 * i))) +% (sum_of_zqs 0 ((stop-2)/2) (fun i -> f (2 * i + 1)) +% f (stop-1));
+      (==) {unfold_sum 0 (stop/2) (fun i -> f (2 * i + 1))}
+      (sum_of_zqs 0 (stop/2) (fun i -> f (2 * i))) +% (sum_of_zqs 0 (stop/2) (fun i -> f (2 * i + 1)));
+    }
