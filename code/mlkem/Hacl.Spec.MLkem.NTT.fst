@@ -53,7 +53,8 @@ open Hacl.Spec.MLkem.Unity
 // Types specifying the possible values of the length and start parameters
 type len_t = l:nat{l = 2 || l = 4 || l = 8 || l = 16 || l = 32 || l = 64 || l = 128}
 type start_t (len:len_t) = s:nat{s % (2*len) = 0 && s < 256}
-type power_of_two = n:size_nat{exists x. pow2 x = n}
+let is_power_of_two (n:size_nat) = exists x. pow2 x = n
+type power_of_two = n:size_nat{is_power_of_two n}
 
 val mul_quotient_ring_kth_term:
     #n:power_of_two
