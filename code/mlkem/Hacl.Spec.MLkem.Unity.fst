@@ -12,7 +12,7 @@ open Hacl.Spec.MLkem.PowModInt
 let is_nth_root_of_unity_mod (#m:prime{m > 2}) (n:nat{n > 0}) (root:nat_mod m) = pow_mod #m root n == 1 /\ root % m <> 0
 let nth_root_of_unity_mod (#m:prime{m > 2}) (n:nat{n > 0}) = root:nat_mod m{is_nth_root_of_unity_mod #m n root}
 let is_primitive (#m:prime{m > 2}) (#n:nat{n > 0}) (a:nat_mod m) = 
-  (forall (k:nat{k < n}). pow_mod #m a k <> 1)
+  (forall (k:pos{k < n}). pow_mod #m a k <> 1)
 let is_primitive_nth_root_of_unity_mod (#m:prime{m > 2}) (n:nat{n > 0}) (root:nat_mod m) = is_nth_root_of_unity_mod #m n root /\ is_primitive #m #n root
 let primitive_nth_root_of_unity_mod (#m:prime{m > 2}) (n:nat{n > 0}) = root:nat_mod m{is_primitive_nth_root_of_unity_mod #m n root}
 
@@ -164,8 +164,8 @@ let nth_root_squared_is_root_rewrite (#m:prime{m > 2}) (n:nat{n > 0}) (root:nat_
     (requires n >= 2 /\ n % 2 == 0 /\ is_nth_root_of_unity_mod #m n root)
     (ensures pow_mod #m root 2 == (root % m) * (root % m) % m)
 = 
-  let k = root / m in 
-  let r = root % m in
+  let k:nat = root / m in 
+  let r:nat = root % m in
   assert (root = k * m + r);
   calc (==) {
     pow_mod #m (k * m + r) 2;
@@ -222,7 +222,7 @@ let nth_root_squared_is_root (#m:prime{m > 2}) (n:nat{n > 0}) (root:nat_mod m):
   };
   nth_root_squared_is_root' #m n root
 
-let nth_root_squared_is_primitive_root_aux (#m:prime{m > 2}) (n:nat{n > 0}) (root:nat_mod m) (k:nat{k < n/2}):
+let nth_root_squared_is_primitive_root_aux (#m:prime{m > 2}) (n:nat{n > 0}) (root:nat_mod m) (k:pos{k < n/2}):
   Lemma 
     (requires n >= 2 /\ n % 2 == 0 /\ is_primitive_nth_root_of_unity_mod #m n root)
     (ensures pow_mod #m (pow_mod #m root 2) k <> 1)
@@ -246,5 +246,5 @@ let nth_root_squared_is_primitive_root (#m:prime{m > 2}) (n:nat{n > 0}) (root:na
 =
   let omega = pow_mod #m root 2 in
   nth_root_squared_is_root #m n root;
-  assert (forall (k:nat{k < n}). pow_mod #m root k <> 1);
+  assert (forall (k:pos{k < n}). pow_mod #m root k <> 1);
   Classical.forall_intro (Classical.move_requires (nth_root_squared_is_primitive_root_aux #m n root))

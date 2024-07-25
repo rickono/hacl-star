@@ -51,7 +51,8 @@ let double_sum_rewrite_lemma (start1 stop1 start2 stop2:int) (f g:int -> int -> 
 let rec sum_mul_lemma (a:zq) (start stop:int) (f:int -> zq): Lemma
     (ensures mul_zq a (sum_of_zqs start stop f) == sum_of_zqs start stop (fun i -> mul_zq a (f i)))
     (decreases (stop - start))
-    [SMTPat (sum_of_zqs start stop (fun i -> a %* (f i)))] =
+    // [SMTPat (sum_of_zqs start stop (fun i -> a %* (f i)))] 
+    =
   if start < stop then (
     sum_mul_lemma a start (stop - 1) f;
     calc (==) {

@@ -51,8 +51,8 @@ open Hacl.Spec.MLkem.Unity
 //   bit7_v (bitrev7 (bitsequence bits))
 
 // Types specifying the possible values of the length and start parameters
-type len_t = l:nat{l = 2 || l = 4 || l = 8 || l = 16 || l = 32 || l = 64 || l = 128}
-type start_t (len:len_t) = s:nat{s % (2*len) = 0 && s < 256}
+// type len_t = l:nat{l = 2 || l = 4 || l = 8 || l = 16 || l = 32 || l = 64 || l = 128}
+// type start_t (len:len_t) = s:nat{s % (2*len) = 0 && s < 256}
 let is_power_of_two (n:size_nat) = exists x. pow2 x = n
 type power_of_two = n:size_nat{is_power_of_two n}
 
@@ -593,7 +593,7 @@ val intt_ntt_is_id:
     #n:power_of_two{n < q}
   -> #psi:primitive_nth_root_of_unity_mod #q (2 * n)
   -> f:lpoly n
-  -> Lemma (requires True) (ensures equal f (intt #n #psi (ntt #n #psi f)))
+  -> Lemma (ensures equal f (intt #n #psi (ntt #n #psi f)))
 let intt_ntt_is_id #n #psi f =
   Classical.forall_intro (intt_ntt_is_id_kth_term #n #psi f)
 
@@ -1116,7 +1116,6 @@ val mul_ntt_ok:
   -> f:lpoly n
   -> g:lpoly n
   -> Lemma 
-      (requires True) 
       (ensures Seq.equal 
         (mul_quotient_ring f g) 
         (intt #n #psi (mul_componentwise (ntt #n #psi f) (ntt #n #psi g))))

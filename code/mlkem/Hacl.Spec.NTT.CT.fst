@@ -439,11 +439,21 @@ let cooley_tukey_kth_term_ok_rewrite_second_half_t2 #n #psi f k =
   cooley_tukey_kth_term_ok_rewrite_second_half_t2' #n #psi f k;
   psi_symmetry_negates #n #psi k
 
+#reset-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 val neg_to_minus:
     a:zq
   -> b:zq
   -> Lemma (a +% ((-1) % q) %* b == a -% b)
-let neg_to_minus a b = ()
+let neg_to_minus a b =
+  calc (==) {
+    a +% ((-1) % q) %* b;
+    (==) {}
+    a +% (q - 1) %* b;
+    (==) {}
+    a +% ((q - 1) * b) % q;
+    (==) {}
+    a +% (b * q - b) % q;
+  }
 
 #reset-options "--z3rlimit 10 --fuel 1 --ifuel 0"
 val cooley_tukey_kth_term_ok_rewrite_second_half:

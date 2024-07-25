@@ -385,6 +385,7 @@ let lemma_pow_mod_int_mul_zero #m a b c =
       1 % m;
     }
 
+#push-options "--split_queries always"
 val lemma_pow_mod_int_mul:
     #m:prime{m > 2}
   -> a:nat_mod m 
@@ -401,6 +402,7 @@ let lemma_pow_mod_int_mul #m a b c =
   else if b < 0 && c < 0 then 
     lemma_pow_mod_int_mul_neg_neg a (-b) (-c)
   else lemma_pow_mod_int_mul_zero #m a b c
+#pop-options
 
   
 val lemma_pow_mod_int_add_pos_pos:
@@ -646,6 +648,7 @@ let lemma_pow_mod_int_add_neg_pos #m a b c =
     pow_mod_int #m a (b - c);
   }
 
+#push-options "--split_queries always"
 val lemma_pow_mod_int_add:
     #m:prime{m > 2}
   -> a:nat_mod m{a % m <> 0}
@@ -657,16 +660,18 @@ let lemma_pow_mod_int_add #m a b c =
   else if b > 0 && c < 0 then lemma_pow_mod_int_add_neg_pos #m a b (-c)
   else if b < 0 && c > 0 then lemma_pow_mod_int_add_neg_pos #m a c (-b)
   else if b < 0 && c < 0 then lemma_pow_mod_int_add_neg_neg #m a (-b) (-c)
-  else if b = 0 then
+  else if b = 0 then begin
+    small_mod 1 m;
     calc (==) {
       (pow_mod_int #m a b * pow_mod_int #m a c) % m;
       (==) {lemma_pow_mod #m a b}
       ((pow a 0 % m) * (pow_mod_int #m a c)) % m;
       (==) {lemma_pow0 a}
       ((1 % m) * (pow_mod_int #m a c)) % m;
-      (==) {small_mod 1 m}
+      (==) {}
       (pow_mod_int #m a c);
     }
+  end
   else 
     calc (==) {
       (pow_mod_int #m a b * pow_mod_int #m a c) % m;
@@ -677,6 +682,7 @@ let lemma_pow_mod_int_add #m a b c =
       (==) {small_mod 1 m}
       (pow_mod_int #m a b);
     }
+#pop-options
 
 let pow_mod_int_neg_one (#m:nat{m > 1}) (n:int): nat_mod m =
   if n % 2 = 0 then 1 else ((-1) % m)
@@ -788,6 +794,7 @@ val lemma_pow_mod_neg_one_eq_pow_mod_base_neg_1:
     #m:prime{m > 2}
   -> Lemma (pow_mod_int #m ((-1) % m) (-1) == pow_mod_int_neg_one #m (-1))
 let lemma_pow_mod_neg_one_eq_pow_mod_base_neg_1 #m =
+  let m:nat = m in
   lemma_pow_mod_inv_def #m ((-1) % m) 1;
   calc (==>) {
     pow_mod_int #m ((-1) % m) 1 * pow_mod_int #m ((-1) % m) (-1) % m == 1;
@@ -817,6 +824,12 @@ let lemma_pow_mod_neg_one_eq_pow_mod_base_neg #m n =
   if n = 0 then lemma_pow_mod_neg_one_eq_pow_mod_base_neg_0 #m
   else lemma_pow_mod_neg_one_eq_pow_mod_base_neg_1 #m
 
+let lemma_mod_neg_1 (m:pos): Lemma ((-1) % m = m - 1) = ()
+
+let lemma_pow_mod_neg_one_eq_pow_mod_neg' (n:nat) (m:prime{m > 2})
+  : Lemma (pow_mod_int_neg_one #m (-(n - 1)) * ((-1) % m) % m == pow_mod_int_neg_one #m (-n) % m)
+= lemma_pow_mod_int_neg_one #m (-(n - 2))
+
 #reset-options "--z3rlimit 20 --fuel 1 --ifuel 0"
 val lemma_pow_mod_neg_one_eq_pow_mod_neg:
     #m:prime{m > 2}
@@ -825,11 +838,11 @@ val lemma_pow_mod_neg_one_eq_pow_mod_neg:
       (ensures pow_mod_int #m ((-1) % m) (-n) == pow_mod_int_neg_one #m (-n))
       (decreases n)
 let rec lemma_pow_mod_neg_one_eq_pow_mod_neg #m n =
-  // assert ((-1) % m = m - 1);
-  assert ((-1) % m = m - 1);
+  lemma_mod_neg_1 m;
   if n = 0 || n = 1 then 
     lemma_pow_mod_neg_one_eq_pow_mod_base_neg #m n
-  else
+  else begin
+    assert ((m - 1) % m <> 0);
     calc (==) {
       pow_mod_int #m (m - 1) (-n);
       (==) {lemma_pow_mod_int_add #m (m - 1) (-(n - 1)) (-1)}
@@ -840,9 +853,10 @@ let rec lemma_pow_mod_neg_one_eq_pow_mod_neg #m n =
       pow_mod_int_neg_one #m (-(n - 1)) * pow_mod_int_neg_one #m (-1) % m;
       (==) {}
       pow_mod_int_neg_one #m (-(n - 1)) * ((-1) % m) % m;
-      (==) {lemma_pow_mod_int_neg_one #m (-(n - 2))}
+      (==) {lemma_pow_mod_neg_one_eq_pow_mod_neg' n m}
       pow_mod_int_neg_one #m (-n) % m;
     }
+  end
 
 val lemma_pow_mod_neg_one_eq_pow_mod:
     #m:prime{m > 2}

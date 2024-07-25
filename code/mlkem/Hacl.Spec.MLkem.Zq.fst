@@ -8,6 +8,8 @@ open Lib.Sequence
 open Lib.NatMod
 open FStar.Math.Euclid
 
+open Hacl.Spec.MLkem.Unity
+
 #reset-options "--z3rlimit 50 --fuel 0 --ifuel 0"
 
 let nonzero_size_nat = x:size_nat{x > 0}
@@ -16,6 +18,53 @@ let q: x:nat{is_prime x} = 7681
 // let m: int = (pow2 32) / q
 let zq = nat_mod q
 
+// root is a root of unity mod m if: root^n = 1 mod m
+let test_root_of_unity (#m:prime) (#n:nat) (root:nat_mod m): bool =
+  (pow root n) % m = 1 && root <> 0
+
+// Returns true if there is no smaller exponent satisfying the property
+let rec test_primitive (#m:prime) (#n:pos) (root:nat_mod m): bool =
+  if n = 1 then
+    true
+  else
+    test_primitive #m #(n-1) root && ((pow root (n-1) % m) <> 1)
+
+// root is a primitive root of unity mod m if root^n = 1 mod m and there are no integers < root l where root^l = 1 mod m
+let test_primitive_root_of_unity (#m:prime) (#n:nat{n > 0}) (root:nat_mod m): bool = 
+  test_root_of_unity #m #n root && test_primitive #m #n root
+
+#reset-options "--z3rlimit 50 --fuel 2 --ifuel 2 --split_queries always"
+// Proof that primitive is a valid test for primitive, that is 
+//      test_primitive #m #n root ==> is_primitive #m #n root
+let rec lemma_primitive_ok (#m:prime{m > 2}) (#n:nat{n > 0}) (root:nat_mod m):
+  Lemma (requires test_primitive #m #n root)
+        (ensures is_primitive #m #n root)
+= if n > 1 then 
+    let minus_one:pos = n - 1 in
+    assert (test_primitive #m #(n-1) root && (pow root (n-1) % m <> 1));
+    lemma_primitive_ok #m #(n-1) root;
+    lemma_pow_mod #m root (n-1)
+
+#reset-options "--z3rlimit 50 --fuel 0 --ifuel 0"
+// Proof that we have a valid test for primitive root of unity, that is 
+//      test_primitive_root_of_unity #m #n root ==> is_primitive_nth_root_of_unity_mod #m #n root
+let lemma_test_primitive_root_of_unity_ok (#m:prime{m > 2}) (#n:nat{n > 0}) (root:nat_mod m): 
+  Lemma (requires test_primitive_root_of_unity #m #n root)
+        (ensures is_primitive_nth_root_of_unity_mod #m n root)
+  = 
+    lemma_pow_mod #m root n;
+    assert (is_nth_root_of_unity_mod #m n root);
+    lemma_primitive_ok #m #n root
+
+
+// Use the test and the lemma to prove that 62 is a 512th root of unity mod 7681
+#reset-options "--z3rlimit 50 --fuel 2 --ifuel 2 --split_queries always --query_stats"
+let root_of_unity_kyber: primitive_nth_root_of_unity_mod #q 512 =
+  assert_norm (test_primitive_root_of_unity #q #512 62);
+  lemma_test_primitive_root_of_unity_ok #q #512 62;
+  62
+
+#reset-options "--z3rlimit 50 --fuel 0 --ifuel 0"
 val int_to_zq: x:int -> zq
 let int_to_zq x = x % q
 
@@ -69,3 +118,4 @@ let lemma_mul_zq_comm a b =
 val lemma_mul_zq_id: a:zq -> 
   Lemma (a %* 1 = a)
   [SMTPat (a %* 1)]
+let lemma_mul_zq_id a = ()
