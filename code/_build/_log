@@ -1,0 +1,14 @@
+### Starting build.
+Backtrace:
+                      - Failed to build the target Hacl_Spec_MLkem_NTT.cmxa
+                          - Building Hacl_Spec_MLkem_NTT.cmxa:
+                              - Failed to build all of these:
+                                  - Building Hacl_Spec_MLkem_NTT.cmx:
+                                      - Failed to build all of these:
+                                          - Building Hacl_Spec_MLkem_NTT.ml:
+                                              - Failed to build all of these:
+                                                  - Building Hacl_Spec_MLkem_NTT.mly
+                                                  - Building Hacl_Spec_MLkem_NTT.mll
+                                          - Building Hacl_Spec_MLkem_NTT.mlpack
+                                  - Building Hacl_Spec_MLkem_NTT.mllib
+# Compilation unsuccessful.

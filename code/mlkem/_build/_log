@@ -1,0 +1,14 @@
+### Starting build.
+# Target: Hacl_Spec_MLkem_NTT.ml.depends, tags: { package(batteries), package(fstar.lib), extension:ml, file:Hacl_Spec_MLkem_NTT.ml, ocaml, ocamldep, quiet }
+ocamlfind ocamldep -package fstar.lib -package batteries -modules Hacl_Spec_MLkem_NTT.ml > Hacl_Spec_MLkem_NTT.ml.depends # cached
+# Target: Hacl_Spec_MLkem_NTT.cmo, tags: { package(batteries), package(fstar.lib), byte, compile, extension:cmo, extension:ml, file:Hacl_Spec_MLkem_NTT.cmo, file:Hacl_Spec_MLkem_NTT.ml, implem, ocaml, quiet }
+ocamlfind ocamlc -c -package fstar.lib -package batteries -o Hacl_Spec_MLkem_NTT.cmo Hacl_Spec_MLkem_NTT.ml
++ ocamlfind ocamlc -c -package fstar.lib -package batteries -o Hacl_Spec_MLkem_NTT.cmo Hacl_Spec_MLkem_NTT.ml
+findlib: [WARNING] Interface topdirs.cmi occurs in several directories: /Users/rickono/.opam/4.14.0/lib/ocaml/compiler-libs, /Users/rickono/.opam/4.14.0/lib/ocaml
+ocamlfind: [WARNING] Package `threads': Linking problems may arise because of the missing -thread or -vmthread switch
+File "Hacl_Spec_MLkem_NTT.ml", line 7, characters 9-35:
+7 |     unit Hacl_Spec_MLkem_Poly.lpoly ->
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^
+Error: Unbound module Hacl_Spec_MLkem_Poly
+Command exited with code 2.
+# Compilation unsuccessful.

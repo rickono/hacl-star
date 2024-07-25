@@ -1,0 +1,3 @@
+(library
+ (name mlkem)
+ (modules Hacl_Spec_MLkem_NTT Hacl_Spec_NTT_GS Hacl_Spec_NTT_CT))
