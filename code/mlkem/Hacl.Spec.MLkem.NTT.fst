@@ -1116,12 +1116,12 @@ val mul_ntt_ok:
   -> f:lpoly n
   -> g:lpoly n
   -> Lemma 
-      (ensures Seq.equal 
+      (ensures equal 
         (mul_quotient_ring f g) 
         (intt #n #psi (mul_componentwise (ntt #n #psi f) (ntt #n #psi g))))
 let mul_ntt_ok #n #psi f g =
   convolution_theorem #n #psi f g;
-  assert (Seq.equal
+  assert (equal
             (intt #n #psi (ntt #n #psi (mul_quotient_ring f g))) 
             (intt #n #psi (mul_componentwise (ntt #n #psi f) (ntt #n #psi g))));
   intt_ntt_is_id #n #psi (mul_quotient_ring f g);

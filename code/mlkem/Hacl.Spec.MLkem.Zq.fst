@@ -64,6 +64,41 @@ let root_of_unity_kyber: primitive_nth_root_of_unity_mod #q 512 =
   lemma_test_primitive_root_of_unity_ok #q #512 62;
   62
 
+let root_of_unity_256: primitive_nth_root_of_unity_mod #q 256 =
+  let omega = pow_mod root_of_unity_kyber 2 in
+  nth_root_squared_is_primitive_root #q 512 root_of_unity_kyber;
+  omega
+
+let root_of_unity_128: primitive_nth_root_of_unity_mod #q 128 =
+  let omega = pow_mod root_of_unity_256 2 in
+  nth_root_squared_is_primitive_root #q 256 root_of_unity_256;
+  omega
+
+let root_of_unity_64: primitive_nth_root_of_unity_mod #q 64 =
+  let omega = pow_mod root_of_unity_128 2 in
+  nth_root_squared_is_primitive_root #q 128 root_of_unity_128;
+  omega
+
+let root_of_unity_32: primitive_nth_root_of_unity_mod #q 32 =
+  let omega = pow_mod root_of_unity_64 2 in
+  nth_root_squared_is_primitive_root #q 64 root_of_unity_64;
+  omega
+
+let root_of_unity_16: primitive_nth_root_of_unity_mod #q 16 =
+  let omega = pow_mod root_of_unity_32 2 in
+  nth_root_squared_is_primitive_root #q 32 root_of_unity_32;
+  omega
+
+let root_of_unity_8: primitive_nth_root_of_unity_mod #q 8 =
+  let omega = pow_mod root_of_unity_16 2 in
+  nth_root_squared_is_primitive_root #q 16 root_of_unity_16;
+  omega
+
+let root_of_unity_4: primitive_nth_root_of_unity_mod #q 4 =
+  let omega = pow_mod root_of_unity_8 2 in
+  nth_root_squared_is_primitive_root #q 8 root_of_unity_8;
+  omega
+
 #reset-options "--z3rlimit 50 --fuel 0 --ifuel 0"
 val int_to_zq: x:int -> zq
 let int_to_zq x = x % q

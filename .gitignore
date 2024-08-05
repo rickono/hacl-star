@@ -32,3 +32,5 @@ doc/_build
 config.h
 *.smt2
 *.runlim
+
+**/_build/*
